@@ -1,0 +1,6 @@
+1. Panel Administrador (Dueño del estudio)
+Email: admin@siguefit.com
+Contraseña: admin123
+2. App Cliente (Usuario para reservar)
+Email: maria@test.com
+Contraseña: 123456
