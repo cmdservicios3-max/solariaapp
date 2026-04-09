@@ -1,4 +1,4 @@
-﻿// ============================================
+// ============================================
 // SigueFit - Toast Notifications + Router
 // ============================================
 var Toast = (function(){
@@ -99,10 +99,19 @@ var Router = (function(){
     }
   }
 
+  function refreshNavbar() {
+    currentUser = Auth.refreshUser(); // re-evaluamos en caso de cambio global
+    var nav = document.getElementById('main-navbar');
+    if (nav) {
+      nav.outerHTML = renderNavbar();
+      bindNavbar(); // reactivamos eventos del menu hamburguesa
+    }
+  }
+
   function init() {
     window.addEventListener('hashchange', handleRoute);
     handleRoute();
   }
 
-  return {register:register, navigate:navigate, init:init, handleRoute:handleRoute};
+  return {register:register, navigate:navigate, init:init, handleRoute:handleRoute, refreshNavbar:refreshNavbar};
 })();

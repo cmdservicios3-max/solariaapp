@@ -1,7 +1,24 @@
-﻿// ============================================
+// ============================================
 // SigueFit - Pages (Client)
 // ============================================
 var Pages = {};
+
+Pages.confirm = function(msg, onConfirm) {
+  var overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.style.zIndex = '9999';
+  overlay.innerHTML = '<div class="modal" style="max-width:400px;text-align:center"><div class="modal-body">'
+    + '<h3 style="margin-bottom:16px;">Verificar Cancelacion</h3>'
+    + '<p style="margin-bottom:24px;white-space:pre-wrap;color:var(--text-secondary)">' + msg + '</p>'
+    + '<div style="display:flex;gap:12px;justify-content:center">'
+    + '<button class="btn btn-ghost" id="sc-cancel">Volver</button>'
+    + '<button class="btn btn-danger" id="sc-ok">Si, cancelar</button>'
+    + '</div></div></div>';
+  document.body.appendChild(overlay);
+  
+  document.getElementById('sc-cancel').onclick = function(){ overlay.remove(); };
+  document.getElementById('sc-ok').onclick = function(){ overlay.remove(); onConfirm(); };
+};
 
 // --- LOGIN ---
 Pages.login = function(container) {
@@ -17,13 +34,13 @@ Pages.login = function(container) {
       + '</div></div>';
     document.getElementById('tab-login').onclick = function(){ isLogin=true; render(); };
     document.getElementById('tab-register').onclick = function(){ isLogin=false; render(); };
-    document.getElementById('auth-form').onsubmit = function(e){
+    document.getElementById('auth-form').onsubmit = async function(e){
       e.preventDefault();
       if (isLogin) {
         var u = Auth.login(document.getElementById('email').value, document.getElementById('password').value);
         if (u) Router.navigate(u.rol==='admin'?'/admin':'/dashboard');
       } else {
-        var u = Auth.register(document.getElementById('nombre').value, document.getElementById('email').value, document.getElementById('password').value, document.getElementById('telefono').value);
+        var u = await Auth.register(document.getElementById('nombre').value, document.getElementById('email').value, document.getElementById('password').value, document.getElementById('telefono').value);
         if (u) Router.navigate('/dashboard');
       }
     };
@@ -50,29 +67,58 @@ Pages.dashboard = function(container) {
   var selectedDate = today.toISOString().split('T')[0];
   var weekOffset = 0;
   var filterType = 'todas';
+  var renderCounter = 0;
 
-  function render() {
-    var cls = DB.getClasses(selectedDate);
-    if (filterType !== 'todas') cls = cls.filter(function(c){ return c.tipo === filterType; });
-    cls.sort(function(a,b){ return a.horario.localeCompare(b.horario); });
+  async function render() {
+    var currentRender = ++renderCounter;
 
+    // 1. Mostrar layout esqueleto mientras ambos calls a la red terminan
     container.innerHTML = '<div class="page-container">'
       + '<div class="page-header"><div><h1>&#127947; Clases Disponibles</h1><p>Reserva tu lugar en la proxima clase</p></div>'
       + '<div class="user-credits" style="font-size:.875rem;padding:8px 16px">&#11088; ' + user.creditos + ' creditos disponibles</div></div>'
-      + renderCalendar()
+      + '<div id="calendar-skeleton" style="padding:20px;text-align:center;color:var(--text-secondary)">Cargando calendario...</div>'
       + renderFilters()
-      + '<div class="classes-grid" id="classes-grid">' + renderClasses(cls) + '</div></div>';
-    bindCalendar();
-    bindClassCards();
+      + '<div class="classes-grid" id="classes-grid" style="display:block; text-align:center; padding:40px 0;">'
+      + '<div style="font-size:2.5rem; margin-bottom:16px; opacity:0.8">&#8987;</div>'
+      + '<div style="color:var(--text-secondary); font-weight:500;">Cargando clases desde Supabase...</div>'
+      + '</div></div>';
+
+    // 2. Fetch asíncrono combinado desde Supabase
+    var [cls, datesMap] = await Promise.all([
+      DB.getClassesFromSupabase(selectedDate),
+      DB.getClassDatesFromSupabase()
+    ]);
+    
+    // Evitar race conditions
+    if (currentRender !== renderCounter) return;
+
+    // 3. Reemplazar Esqueleto de Calendario y volver a atar eventos
+    var calSkeleton = document.getElementById('calendar-skeleton');
+    if (calSkeleton) {
+      calSkeleton.outerHTML = renderCalendar(datesMap);
+      bindCalendar();
+    }
+
+    // 4. Aplicar filtros locales y ordenamientos
+    if (filterType !== 'todas') cls = cls.filter(function(c){ return c.tipo === filterType; });
+    cls.sort(function(a,b){ return a.horario.localeCompare(b.horario); });
+
+    // 5. Actualizar el grid con los datos reales
+    var grid = document.getElementById('classes-grid');
+    if (grid) {
+      grid.style = ''; // Quitar el block styling inline de carga
+      grid.innerHTML = renderClasses(cls);
+      bindClassCards();
+    }
   }
 
-  function renderCalendar() {
+  function renderCalendar(datesMap) {
+    if (!datesMap) datesMap = {};
     var dias = ['Dom','Lun','Mar','Mie','Jue','Vie','Sab'];
     var meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
     var start = new Date(today);
     start.setDate(today.getDate() + (weekOffset * 7));
     var monthYear = meses[start.getMonth()] + ' ' + start.getFullYear();
-    var datesMap = DB.getClassDates();
     var html = '<div class="calendar-header"><div class="calendar-title">' + monthYear + '</div>'
       + '<div class="calendar-nav"><button id="cal-prev">&#9664;</button><button id="cal-today" style="width:auto;padding:0 12px;font-size:.75rem">Hoy</button><button id="cal-next">&#9654;</button></div></div>'
       + '<div class="calendar-days">';
@@ -141,7 +187,7 @@ Pages.dashboard = function(container) {
       el.onclick = function(e) {
         if (e.target.dataset.book) {
           e.stopPropagation();
-          doBooking(parseInt(e.target.dataset.book));
+          doBooking(parseInt(e.target.dataset.book), e.target);
           return;
         }
         Router.navigate('/clase/' + el.dataset.id);
@@ -150,17 +196,24 @@ Pages.dashboard = function(container) {
     document.querySelectorAll('[data-book]').forEach(function(btn) {
       btn.onclick = function(e) {
         e.stopPropagation();
-        doBooking(parseInt(btn.dataset.book));
+        doBooking(parseInt(btn.dataset.book), btn);
       };
     });
   }
 
-  function doBooking(classId) {
-    var result = DB.createBooking(user.id, classId);
-    if (result.error) { Toast.show('error','No se pudo reservar', result.error); return; }
-    Toast.show('success','Reserva confirmada','Tu lugar esta asegurado');
-    user = Auth.refreshUser();
-    render();
+  async function doBooking(classId, btnEl) {
+    if (btnEl) { btnEl.disabled = true; btnEl.innerHTML = '...'; }
+    var result = await DB.createBookingInSupabase(user.id, classId);
+    
+    if (result.error) { 
+      Toast.show('error','No se pudo reservar', result.error); 
+      if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = 'Reservar'; }
+      return; 
+    }
+    Toast.show('success','Reserva confirmada','Tu lugar está asegurado en la nube');
+    user = Auth.refreshUser(); // usuario local fresco 
+    if(window.Router && Router.refreshNavbar) Router.refreshNavbar(); // navbar unificado
+    render(); // dispara query global nuevo
   }
 
   render();
@@ -211,20 +264,47 @@ Pages.classDetail = function(container, classId) {
       + '</div></div></div>';
 
     var bookBtn = document.getElementById('book-btn');
-    if (bookBtn) bookBtn.onclick = function() {
-      var result = DB.createBooking(user.id, cls.id);
-      if (result.error) { Toast.show('error','Error', result.error); return; }
-      Toast.show('success','Reserva confirmada','Tu lugar esta asegurado');
+    if (bookBtn) bookBtn.onclick = async function() {
+      bookBtn.disabled = true; bookBtn.innerHTML = 'Procesando...';
+      var result = await DB.createBookingInSupabase(user.id, cls.id);
+      if (result.error) { 
+        Toast.show('error','Error', result.error); 
+        bookBtn.disabled = false; bookBtn.innerHTML = '&#10003; Reservar mi lugar';
+        return; 
+      }
+      Toast.show('success','Reserva confirmada','Tu lugar está asegurado en la nube');
       Auth.refreshUser();
+      if(window.Router && Router.refreshNavbar) Router.refreshNavbar();
       render();
     };
+    
     var cancelBtn = document.getElementById('cancel-btn');
-    if (cancelBtn) cancelBtn.onclick = function() {
+    if (cancelBtn) cancelBtn.onclick = async function() {
       if (userBooking) {
-        DB.cancelBooking(userBooking.id);
-        Toast.show('info','Reserva cancelada','Tu credito fue devuelto');
-        Auth.refreshUser();
-        render();
+        console.log('Cancel click desde Detalles', userBooking.id);
+        var classTime = new Date(cls.fecha + 'T' + (cls.horario || '00:00') + ':00');
+        var isLate = ((classTime - new Date()) / (1000 * 60 * 60)) < 3;
+        var msg = isLate 
+          ? "Estás fuera del horario de cancelación (menos de 3hs o clase pasada).\nSi continúas, perderás el crédito.\n\n¿Cancelar de todos modos?" 
+          : "¿Estás seguro de cancelar tu reserva?\nSe te devolverá el crédito a tu cuenta.";
+        
+        Pages.confirm(msg, async function() {
+          cancelBtn.disabled = true; cancelBtn.innerHTML = 'Procesando...';
+          console.log('Enviando petición a la nube...');
+          
+          var r = await DB.cancelBookingInSupabase(userBooking.id);
+          console.log('Resultado de cancelación:', r);
+          
+          if (r.error) {
+            Toast.show('error','Error', r.error);
+            cancelBtn.disabled = false; cancelBtn.innerHTML = 'Cancelar mi reserva';
+            return;
+          }
+          Toast.show('info','Reserva cancelada', r.isLate ? 'Cancelación tardía. El crédito no fue devuelto.' : 'Tu crédito fue devuelto a Supabase');
+          Auth.refreshUser();
+          if(window.Router && Router.refreshNavbar) Router.refreshNavbar();
+          render(); // al refrescar, la sincronizacion de la db mantendra compatibles los reads locales
+        });
       }
     };
   }
@@ -250,8 +330,15 @@ Pages.classDetail = function(container, classId) {
 Pages.myBookings = function(container) {
   var user = Auth.refreshUser();
 
-  function render() {
-    var bookings = DB.getBookings(user.id);
+  async function render() {
+    container.innerHTML = '<div class="page-container" style="text-align:center;padding:40px;">'
+      + '<div style="font-size:2rem;margin-bottom:16px">&#8987;</div>'
+      + '<div style="color:var(--text-secondary)">Cargando tu historial desde la nube...</div></div>';
+
+    // Pedimos las reservas reales a Supabase
+    var bookings = await DB.getBookingsFromSupabase(user.id);
+    
+    // Separadores para BONUS (activas vs canceladas)
     var activas = bookings.filter(function(b){return b.estado==='reservado';});
     var pasadas = bookings.filter(function(b){return b.estado!=='reservado';});
 
@@ -260,7 +347,7 @@ Pages.myBookings = function(container) {
       + '<div class="user-credits" style="font-size:.875rem;padding:8px 16px">&#11088; ' + user.creditos + ' creditos</div></div>'
       + '<div class="section-header"><h2 class="section-title">&#9989; Reservas Activas (' + activas.length + ')</h2></div>'
       + '<div class="bookings-list" style="margin-bottom:32px">' + renderBookings(activas, true) + '</div>'
-      + (pasadas.length > 0 ? '<div class="section-header"><h2 class="section-title">&#128203; Historial</h2></div><div class="bookings-list">' + renderBookings(pasadas, false) + '</div>' : '')
+      + (pasadas.length > 0 ? '<div class="section-header"><h2 class="section-title">&#128203; Historial ('+pasadas.length+')</h2></div><div class="bookings-list">' + renderBookings(pasadas, false) + '</div>' : '')
       + '</div>';
     bindActions();
   }
@@ -269,26 +356,56 @@ Pages.myBookings = function(container) {
     if (bks.length === 0) return '<div class="empty-state" style="padding:32px"><div class="empty-icon">&#128196;</div><h3>No hay reservas</h3><p>Explora las clases disponibles y reserva tu lugar</p><button class="btn btn-primary" onclick="Router.navigate(\'/dashboard\')">Ver Clases</button></div>';
     var html = '';
     bks.forEach(function(b) {
-      var cls = DB.getClass(b.clase_id);
+      // Usamos exclusivamente la clase embebida desde Supabase
+      var cls = b.clases;
       if (!cls) return;
-      var d = new Date(cls.fecha + 'T12:00:00');
+      var d = new Date(cls.fecha + 'T' + (cls.horario || '00:00') + ':00');
+      var isLate = ((d - new Date()) / (1000 * 60 * 60)) < 3;
       var meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
       var statusBadge = b.estado==='reservado' ? '<span class="badge badge-success">Confirmada</span>' : '<span class="badge badge-danger">Cancelada</span>';
       html += '<div class="booking-card"><div class="booking-info">'
         + '<div class="booking-date-badge"><div class="bd-day">' + d.getDate() + '</div><div class="bd-month">' + meses[d.getMonth()] + '</div></div>'
         + '<div class="booking-details"><h3>' + cls.nombre + '</h3><p>&#128336; ' + cls.horario + ' &middot; ' + cls.duracion + ' min &middot; ' + (cls.instructor||'') + '</p></div></div>'
         + '<div class="booking-actions">' + statusBadge
-        + (canCancel && b.estado==='reservado' ? ' <button class="btn btn-danger btn-sm" data-cancel="' + b.id + '">Cancelar</button>' : '')
+        + (canCancel && b.estado==='reservado' ? ' <button class="btn btn-danger btn-sm" data-cancel="' + b.id + '" data-late="' + (isLate ? '1' : '0') + '">Cancelar</button>' : '')
         + '</div></div>';
     });
     return html;
   }
 
   function bindActions() {
-    document.querySelectorAll('[data-cancel]').forEach(function(btn) {
-      btn.onclick = function() {
-        var r = DB.cancelBooking(parseInt(btn.dataset.cancel));
-        if (r.success) { Toast.show('info','Reserva cancelada','Tu credito fue devuelto'); user = Auth.refreshUser(); render(); }
+    var btns = document.querySelectorAll('[data-cancel]');
+    console.log('Asignando eventos a ' + btns.length + ' botones de cancelar');
+    
+    btns.forEach(function(btn) {
+      btn.onclick = async function() {
+        var bookingId = parseInt(this.dataset.cancel);
+        console.log('Cancel click', bookingId);
+        
+        var isLate = this.dataset.late === '1';
+        var msg = isLate 
+          ? "Estás fuera del horario de cancelación (menos de 3hs o clase pasada).\nSi continúas, perderás el crédito.\n\n¿Cancelar de todos modos?" 
+          : "¿Estás seguro de cancelar tu reserva?\nSe te devolverá el crédito a tu cuenta.";
+          
+        var btnElement = this;
+        Pages.confirm(msg, async function() {
+          btnElement.disabled = true; btnElement.innerHTML = '...';
+          console.log('Enviando petición a la nube...');
+          
+          var r = await DB.cancelBookingInSupabase(bookingId);
+          console.log('Resultado de cancelación:', r);
+          
+          if (r.error) {
+             Toast.show('error', 'Error', r.error);
+             btnElement.disabled = false; btnElement.innerHTML = 'Cancelar';
+             return;
+          }
+          
+          Toast.show('info','Reserva cancelada', r.isLate ? 'Cancelación tardía. El crédito no fue devuelto.' : 'Tu crédito fue devuelto a Supabase');
+          user = Auth.refreshUser(); 
+          if(window.Router && Router.refreshNavbar) Router.refreshNavbar();
+          render();
+        });
       };
     });
   }

@@ -1,4 +1,4 @@
-﻿// ============================================
+// ============================================
 // SigueFit - Database Layer (localStorage)
 // ============================================
 var DB = (function() {
@@ -46,12 +46,12 @@ var DB = (function() {
         {id:3,studio_id:1,nombre:'Juan Perez',email:'juan@test.com',password:'123456',telefono:'+5491155553333',rol:'cliente',creditos:2,activo:1,created_at:new Date().toISOString()},
         {id:4,studio_id:1,nombre:'Lucia Fernandez',email:'lucia@test.com',password:'123456',telefono:'+5491155554444',rol:'cliente',creditos:0,activo:1,created_at:new Date().toISOString()}
       ],
-      clases: classes,
+      clases: [],
       reservas: [],
       pagos: [],
       mensajes: [],
       config: {studio_name:'SigueFit Studio', cancel_hours:12, class_price:2500, currency:'ARS'},
-      nextIds: {usuarios:5, reservas:1, pagos:1, mensajes:1, clases:id}
+      nextIds: {usuarios:5, reservas:1, pagos:1, mensajes:1, clases:1}
     };
   }
 
@@ -87,6 +87,118 @@ var DB = (function() {
   function getClients() { return getData().usuarios.filter(function(u){return u.rol==='cliente';}); }
 
   // Classes
+  async function getClassesFromSupabase(fecha) {
+    try {
+      if (typeof supabaseClient === 'undefined') {
+        console.warn("Supabase client no definido globalmente.");
+        return [];
+      }
+      // Retiramos el .eq('activa', 1) para traer todas y poder evaluar null/undefined
+      var query = supabaseClient.from('clases').select('*');
+      if (fecha) {
+        query = query.eq('fecha', fecha);
+      }
+      var response = await query;
+      if (response.error) {
+        console.error("Error al obtener clases desde Supabase:", response.error.message);
+        return [];
+      }
+      
+      var data = response.data || [];
+      // Solo excluye si estrictamente es === false (incluyendo así true, null, undefined)
+      return data.filter(function(c) {
+        return c.activa !== false;
+      });
+    } catch (err) {
+      console.error("Excepción inesperada al consultar Supabase:", err);
+      return [];
+    }
+  }
+
+  async function getClassDatesFromSupabase() {
+    try {
+      if (typeof supabaseClient === 'undefined') return {};
+      // Pedir solo las columnas clave ayuda a optimizar
+      var { data, error } = await supabaseClient.from('clases').select('fecha, activa');
+      if (error) { console.error('Error extrayendo fechas:', error.message); return {}; }
+      
+      var dates = {};
+      var activas = (data || []).filter(function(c) { return c.activa !== false; });
+      activas.forEach(function(c) {
+        if (!dates[c.fecha]) dates[c.fecha] = 0;
+        dates[c.fecha]++;
+      });
+      return dates;
+    } catch (err) {
+      console.error(err); return {};
+    }
+  }
+
+  async function addClassToSupabase(cls) {
+    try {
+      if (typeof supabaseClient === 'undefined') return null;
+      cls.activa = true;
+      var response = await supabaseClient.from('clases').insert([cls]).select();
+      if (response.error) { console.error('Error creando en Supabase:', response.error.message); return null; }
+      return response.data && response.data[0] ? response.data[0] : null;
+    } catch (err) { console.error(err); return null; }
+  }
+
+  async function addUserToSupabase(user) {
+    try {
+      if (typeof supabaseClient === 'undefined') return { error: 'Supabase no conectado' };
+      
+      // Hacemos una copia para no alterar la referencia en memoria
+      var userPayload = Object.assign({}, user);
+      
+      // Asegurar que el campo "activo" sea boolean en caso de que en localStorage esté como 1
+      userPayload.activo = (userPayload.activo === 1 || userPayload.activo === true);
+
+      var { data, error } = await supabaseClient.from('usuarios').insert([userPayload]).select();
+      
+      if (error) { 
+        console.error('Error insertando usuario en Supabase:', error.message);
+        return { error: error.message };
+      }
+      return { success: true, data: data[0] };
+    } catch (err) {
+      console.error(err);
+      return { error: 'Excepción inesperada al sincronizar usuario' };
+    }
+  }
+
+  async function updateClassInSupabase(id, updates) {
+    try {
+      if (typeof supabaseClient === 'undefined') return null;
+      var response = await supabaseClient.from('clases').update(updates).eq('id', id).select();
+      if (response.error) { console.error('Error actualizando en Supabase:', response.error.message); return null; }
+      return response.data && response.data[0] ? response.data[0] : null;
+    } catch (err) { console.error(err); return null; }
+  }
+
+  async function updateUserInSupabase(id, updates) {
+    try {
+      if (typeof supabaseClient === 'undefined') return null;
+      var response = await supabaseClient.from('usuarios').update(updates).eq('id', id).select();
+      if (response.error) { 
+        console.error('Error actualizando usuario en Supabase:', response.error.message); 
+        return null; 
+      }
+      // Actualizamos localmente para asegurar el estado híbrido
+      var localUser = updateUser(id, updates);
+      return response.data && response.data[0] ? response.data[0] : localUser;
+    } catch (err) { console.error(err); return null; }
+  }
+
+  async function deleteClassFromSupabase(id) {
+    try {
+      if (typeof supabaseClient === 'undefined') return false;
+      var response = await supabaseClient.from('clases').delete().eq('id', id);
+      if (response.error) { console.error('Error eliminando en Supabase:', response.error.message); return false; }
+      return true;
+    } catch (err) { console.error(err); return false; }
+  }
+
   function getClasses(fecha) {
     var d = getData();
     if (fecha) return d.clases.filter(function(c){return c.fecha===fecha && c.activa;});
@@ -145,18 +257,148 @@ var DB = (function() {
     save();
     return {booking:booking, payment:payment, usedCredit:usedCredit};
   }
-  function cancelBooking(bookingId) {
+  function cancelBooking(bookingId, isLate) {
     var d = getData();
     var b = d.reservas.find(function(r){return r.id===bookingId;});
     if (!b || b.estado!=='reservado') return {error:'Reserva no encontrada'};
     b.estado = 'cancelado';
     var cls = d.clases.find(function(c){return c.id===b.clase_id;});
     if (cls) cls.cupo_disponible++;
-    if (b.credito_usado) {
+    if (b.credito_usado && !isLate) {
       var user = d.usuarios.find(function(u){return u.id===b.usuario_id;});
       if (user) user.creditos++;
     }
     save(); return {success:true};
+  }
+
+  // Bookings in Supabase
+  async function createBookingInSupabase(userId, classId) {
+    try {
+      if (typeof supabaseClient === 'undefined') return { error: 'Supabase no está conectado' };
+
+      // 1. Obtener clase y validar cupo en DB
+      var { data: cls, error: clsError } = await supabaseClient.from('clases').select('*').eq('id', classId).single();
+      if (clsError || !cls) return { error: 'Clase no encontrada en el sistema' };
+      if (cls.cupo_disponible <= 0) return { error: 'No hay cupo disponible' };
+
+      // 2. Obtener usuario de Supabase y chequear si tiene crédito
+      var { data: userDb, error: usrError } = await supabaseClient.from('usuarios').select('*').eq('id', userId).single();
+      if (usrError || !userDb) return { error: 'Usuario no encontrado en el servidor' };
+      if (userDb.creditos <= 0) return { error: 'No tienes créditos suficientes (los pagos se migrarán pronto)' };
+
+      // 3. Verificar si la reserva ya existe
+      var { data: existing, error: extError } = await supabaseClient.from('reservas')
+        .select('*').eq('usuario_id', userId).eq('clase_id', classId).eq('estado', 'reservado');
+      if (extError) return { error: 'Error verificando reservas activas' };
+      if (existing && existing.length > 0) return { error: 'Ya tienes una reserva activa en esta clase' };
+
+      // 4. Insertar reserva en la nube
+      var newBooking = {
+        usuario_id: userId,
+        clase_id: classId,
+        estado: 'reservado',
+        credito_usado: 1
+      };
+      
+      var { data: bookingData, error: insertError } = await supabaseClient.from('reservas').insert([newBooking]).select();
+      if (insertError) return { error: 'Error procesando tu reserva en la nube' };
+      
+      var finalBooking = bookingData[0];
+
+      // 5. Consolidar el descuento: actualizar en supabase clases y usuarios
+      await supabaseClient.from('clases').update({ cupo_disponible: cls.cupo_disponible - 1 }).eq('id', classId);
+      await supabaseClient.from('usuarios').update({ creditos: userDb.creditos - 1 }).eq('id', userId);
+
+      // 6. ¡Sincronizar localStorage! Mantenemos compatibilidad con el resto de la app
+      var d = getData();
+      var localCls = d.clases.find(function(c){return c.id===classId;});
+      var localUser = d.usuarios.find(function(u){return u.id===userId;});
+      if (localCls) localCls.cupo_disponible--;
+      if (localUser) localUser.creditos--;
+      
+      var syncBk = {
+        id: finalBooking.id, // Forzamos coincidencia de IDs
+        usuario_id: userId,
+        clase_id: classId,
+        estado: 'reservado',
+        credito_usado: 1,
+        created_at: finalBooking.created_at
+      };
+      d.reservas.push(syncBk);
+      save();
+
+      return { success: true, booking: finalBooking };
+    } catch (err) {
+      console.error(err);
+      return { error: 'Ocurrió un error inesperado. Intenta de nuevo' };
+    }
+  }
+
+  async function cancelBookingInSupabase(bookingId) {
+    try {
+      console.log('Iniciando DB.cancelBookingInSupabase para ID:', bookingId);
+      if (typeof supabaseClient === 'undefined') return { error: 'Supabase desconectado' };
+
+      // 1. Validar la reserva en Supabase
+      var { data: booking, error: bkError } = await supabaseClient.from('reservas').select('*').eq('id', bookingId).single();
+      if (bkError || !booking) {
+        console.warn('Reserva no encontrada en DB:', bkError);
+        return { error: 'No pudimos encontrar la reserva en el servidor' };
+      }
+      if (booking.estado !== 'reservado') return { error: 'La reserva ya figura como cancelada' };
+
+      // 2. Transición de estado en BD
+      var { error: updateBkError } = await supabaseClient.from('reservas').update({ estado: 'cancelado' }).eq('id', bookingId);
+      if (updateBkError) return { error: 'Fallo central al cancelar tu reserva' };
+
+      // 3 y 4. Reactivar cupo y créditos
+      var { data: cls } = await supabaseClient.from('clases').select('fecha, horario, cupo_disponible').eq('id', booking.clase_id).single();
+      var isLate = false;
+      if (cls) {
+        await supabaseClient.from('clases').update({ cupo_disponible: cls.cupo_disponible + 1 }).eq('id', booking.clase_id);
+        var classDate = new Date(cls.fecha + 'T' + (cls.horario || '00:00') + ':00');
+        var now = new Date();
+        var hoursDiff = (classDate - now) / (1000 * 60 * 60);
+        isLate = hoursDiff < 3;
+      }
+      
+      if (booking.credito_usado === 1 && !isLate) {
+        var { data: dbUser } = await supabaseClient.from('usuarios').select('creditos').eq('id', booking.usuario_id).single();
+        if (dbUser) {
+          await supabaseClient.from('usuarios').update({ creditos: dbUser.creditos + 1 }).eq('id', booking.usuario_id);
+        }
+      }
+
+      // 5. ¡Sincronizar localStorage! (Para pantallas no migradas y el estado base)
+      cancelBooking(bookingId, isLate); // Llamamos al método nativo con el ID homologado
+      console.log('Cancelación finalizada exitosamente. isLate:', isLate);
+      return { success: true, isLate: isLate };
+    } catch (err) {
+      console.error(err);
+      return { error: 'Error del sistema en Supabase.' };
+    }
+  }
+
+  async function getBookingsFromSupabase(userId) {
+    try {
+      if (typeof supabaseClient === 'undefined') return [];
+      
+      // Pedimos las reservas y le indicamos que haga un Join automático a la tabla "clases"
+      // Traemos todo el historial para poder separarlo en frontend si se desea
+      var { data, error } = await supabaseClient
+        .from('reservas')
+        .select('*, clases(*)')
+        .eq('usuario_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error al obtener mis reservas:', error.message);
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.error(err); return [];
+    }
   }
 
   // Payments
@@ -198,11 +440,11 @@ var DB = (function() {
   }
 
   return {
-    load:load, save:save, reset:reset, login:login, register:register, getUser:getUser,
-    updateUser:updateUser, getClients:getClients, getClasses:getClasses, getClass:getClass,
-    addClass:addClass, updateClass:updateClass, deleteClass:deleteClass, getClassDates:getClassDates,
-    getBookings:getBookings, getBookingsByClass:getBookingsByClass, createBooking:createBooking,
-    cancelBooking:cancelBooking, getPayments:getPayments, simulatePayment:simulatePayment,
+    load:load, save:save, reset:reset, login:login, register:register, getUser:getUser, addUserToSupabase:addUserToSupabase,
+    updateUser:updateUser, updateUserInSupabase:updateUserInSupabase, getClients:getClients, getClasses:getClasses, getClassesFromSupabase:getClassesFromSupabase, getClassDatesFromSupabase:getClassDatesFromSupabase, getClass:getClass,
+    addClass:addClass, addClassToSupabase:addClassToSupabase, updateClass:updateClass, updateClassInSupabase:updateClassInSupabase, deleteClass:deleteClass, deleteClassFromSupabase:deleteClassFromSupabase, getClassDates:getClassDates,
+    getBookings:getBookings, getBookingsByClass:getBookingsByClass, getBookingsFromSupabase:getBookingsFromSupabase, createBooking:createBooking, createBookingInSupabase:createBookingInSupabase,
+    cancelBooking:cancelBooking, cancelBookingInSupabase:cancelBookingInSupabase, getPayments:getPayments, simulatePayment:simulatePayment,
     addMessage:addMessage, getMessages:getMessages, getStats:getStats, getData:getData
   };
 })();
