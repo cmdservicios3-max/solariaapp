@@ -254,7 +254,7 @@ Pages.classDetail = function(container, classId) {
       + '<span style="font-weight:700;white-space:nowrap">' + Math.round(pct) + '%</span></div>'
       + '<p style="color:var(--text-secondary);font-size:.875rem">' + (cls.cupo_total - cls.cupo_disponible) + ' personas inscriptas de ' + cls.cupo_total + ' lugares</p>'
       + (userBooking
-        ? '<button class="btn btn-danger btn-block" style="margin-top:16px" id="cancel-btn">Cancelar mi reserva</button>'
+        ? '<div style="margin-top:16px;font-size:0.8rem;color:var(--text-secondary);"><span style="color:var(--text-warning)">&#9888;</span> Recuerda: puedes cancelar sin penalización hasta 3 horas antes.</div><button class="btn btn-danger btn-block" style="margin-top:8px" id="cancel-btn">Cancelar mi reserva</button>'
         : (cls.cupo_disponible > 0
           ? '<button class="btn btn-primary btn-block btn-lg" style="margin-top:16px" id="book-btn">&#10003; Reservar mi lugar</button>'
           : '<button class="btn btn-ghost btn-block" disabled style="margin-top:16px">Sin cupo disponible</button>'))
@@ -281,7 +281,6 @@ Pages.classDetail = function(container, classId) {
     var cancelBtn = document.getElementById('cancel-btn');
     if (cancelBtn) cancelBtn.onclick = async function() {
       if (userBooking) {
-        console.log('Cancel click desde Detalles', userBooking.id);
         var classTime = new Date(cls.fecha + 'T' + (cls.horario || '00:00') + ':00');
         var isLate = ((classTime - new Date()) / (1000 * 60 * 60)) < 3;
         var msg = isLate 
@@ -290,10 +289,8 @@ Pages.classDetail = function(container, classId) {
         
         Pages.confirm(msg, async function() {
           cancelBtn.disabled = true; cancelBtn.innerHTML = 'Procesando...';
-          console.log('Enviando petición a la nube...');
           
           var r = await DB.cancelBookingInSupabase(userBooking.id);
-          console.log('Resultado de cancelación:', r);
           
           if (r.error) {
             Toast.show('error','Error', r.error);
@@ -345,6 +342,7 @@ Pages.myBookings = function(container) {
     container.innerHTML = '<div class="page-container">'
       + '<div class="page-header"><div><h1>&#128196; Mis Reservas</h1><p>Historial y reservas activas</p></div>'
       + '<div class="user-credits" style="font-size:.875rem;padding:8px 16px">&#11088; ' + user.creditos + ' creditos</div></div>'
+      + '<div style="margin-bottom:24px;padding:12px 16px;background:var(--bg-glass-strong);border-radius:8px;font-size:0.875rem;color:var(--text-secondary);"><span style="color:var(--text-warning)">&#9888;</span> Recuerda: puedes cancelar sin penalización hasta 3 horas antes de la clase.</div>'
       + '<div class="section-header"><h2 class="section-title">&#9989; Reservas Activas (' + activas.length + ')</h2></div>'
       + '<div class="bookings-list" style="margin-bottom:32px">' + renderBookings(activas, true) + '</div>'
       + (pasadas.length > 0 ? '<div class="section-header"><h2 class="section-title">&#128203; Historial ('+pasadas.length+')</h2></div><div class="bookings-list">' + renderBookings(pasadas, false) + '</div>' : '')
@@ -353,7 +351,8 @@ Pages.myBookings = function(container) {
   }
 
   function renderBookings(bks, canCancel) {
-    if (bks.length === 0) return '<div class="empty-state" style="padding:32px"><div class="empty-icon">&#128196;</div><h3>No hay reservas</h3><p>Explora las clases disponibles y reserva tu lugar</p><button class="btn btn-primary" onclick="Router.navigate(\'/dashboard\')">Ver Clases</button></div>';
+    if (bks.length === 0 && canCancel) return '<div class="empty-state" style="padding:32px"><div class="empty-icon">&#128196;</div><h3>No tienes reservas aún</h3><p>Explora las clases disponibles y reserva tu lugar</p><button class="btn btn-primary" onclick="Router.navigate(\'/dashboard\')">Ver Clases</button></div>';
+    if (bks.length === 0) return '<div class="empty-state" style="padding:32px"><p>No hay historial de clases.</p></div>';
     var html = '';
     bks.forEach(function(b) {
       // Usamos exclusivamente la clase embebida desde Supabase
@@ -375,12 +374,10 @@ Pages.myBookings = function(container) {
 
   function bindActions() {
     var btns = document.querySelectorAll('[data-cancel]');
-    console.log('Asignando eventos a ' + btns.length + ' botones de cancelar');
     
     btns.forEach(function(btn) {
       btn.onclick = async function() {
         var bookingId = parseInt(this.dataset.cancel);
-        console.log('Cancel click', bookingId);
         
         var isLate = this.dataset.late === '1';
         var msg = isLate 
@@ -390,10 +387,8 @@ Pages.myBookings = function(container) {
         var btnElement = this;
         Pages.confirm(msg, async function() {
           btnElement.disabled = true; btnElement.innerHTML = '...';
-          console.log('Enviando petición a la nube...');
           
           var r = await DB.cancelBookingInSupabase(bookingId);
-          console.log('Resultado de cancelación:', r);
           
           if (r.error) {
              Toast.show('error', 'Error', r.error);

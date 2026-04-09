@@ -336,13 +336,11 @@ var DB = (function() {
 
   async function cancelBookingInSupabase(bookingId) {
     try {
-      console.log('Iniciando DB.cancelBookingInSupabase para ID:', bookingId);
       if (typeof supabaseClient === 'undefined') return { error: 'Supabase desconectado' };
 
       // 1. Validar la reserva en Supabase
       var { data: booking, error: bkError } = await supabaseClient.from('reservas').select('*').eq('id', bookingId).single();
       if (bkError || !booking) {
-        console.warn('Reserva no encontrada en DB:', bkError);
         return { error: 'No pudimos encontrar la reserva en el servidor' };
       }
       if (booking.estado !== 'reservado') return { error: 'La reserva ya figura como cancelada' };
@@ -371,7 +369,6 @@ var DB = (function() {
 
       // 5. ¡Sincronizar localStorage! (Para pantallas no migradas y el estado base)
       cancelBooking(bookingId, isLate); // Llamamos al método nativo con el ID homologado
-      console.log('Cancelación finalizada exitosamente. isLate:', isLate);
       return { success: true, isLate: isLate };
     } catch (err) {
       console.error(err);
