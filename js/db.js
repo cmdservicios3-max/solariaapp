@@ -57,6 +57,14 @@ var DB = (function() {
     if (u) { Object.assign(u, updates); save(); } return u;
   }
   function getClients() { return getData().usuarios.filter(function(u){return u.rol==='cliente';}); }
+  async function getClientsFromSupabase() {
+    try {
+      if (typeof supabaseClient === 'undefined') return [];
+      var { data, error } = await supabaseClient.from('usuarios').select('*').eq('rol', 'cliente').order('nombre', { ascending: true });
+      if (error) { console.error('Error al obtener clientes:', error.message); return []; }
+      return data || [];
+    } catch (err) { console.error(err); return []; }
+  }
 
   // Classes
   async function getClassesFromSupabase(fecha) {
@@ -410,7 +418,7 @@ var DB = (function() {
 
   return {
     load:load, save:save, reset:reset, login:login, register:register, getUser:getUser, getUserByEmail:getUserByEmail, validateUserForReset:validateUserForReset, addUserToSupabase:addUserToSupabase,
-    updateUser:updateUser, updateUserInSupabase:updateUserInSupabase, getClients:getClients, getClasses:getClasses, getClassesFromSupabase:getClassesFromSupabase, getClassDatesFromSupabase:getClassDatesFromSupabase, getClass:getClass,
+    updateUser:updateUser, updateUserInSupabase:updateUserInSupabase, getClients:getClients, getClientsFromSupabase:getClientsFromSupabase, getClasses:getClasses, getClassesFromSupabase:getClassesFromSupabase, getClassDatesFromSupabase:getClassDatesFromSupabase, getClass:getClass,
     addClass:addClass, addClassToSupabase:addClassToSupabase, updateClass:updateClass, updateClassInSupabase:updateClassInSupabase, deleteClass:deleteClass, deleteClassFromSupabase:deleteClassFromSupabase, getClassDates:getClassDates,
     getBookings:getBookings, getBookingsByClass:getBookingsByClass, getBookingsFromSupabase:getBookingsFromSupabase, createBooking:createBooking, createBookingInSupabase:createBookingInSupabase,
     cancelBooking:cancelBooking, cancelBookingInSupabase:cancelBookingInSupabase, getPayments:getPayments, simulatePayment:simulatePayment,

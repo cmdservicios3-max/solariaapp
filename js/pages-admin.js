@@ -255,18 +255,28 @@ Pages.adminClases = function(container) {
 // --- ADMIN CLIENTS ---
 Pages.adminClientes = function(container) {
   async function render() {
-    var clients = DB.getClients();
+    container.innerHTML = '<div class="page-container"><div class="page-header"><div><h1>&#128101; Gestion de Clientes</h1><p>Cargando clientes desde la nube...</p></div></div>'
+      + '<div style="text-align:center;padding:40px;opacity:0.6;"><div style="font-size:2rem;margin-bottom:12px;">&#8987;</div>Sincronizando con Supabase...</div></div>';
+
+    var clients = await DB.getClientsFromSupabase();
+    
+    // Obtenemos conteos de reservas en paralelo para optimizar
+    var clientsWithBookings = await Promise.all(clients.map(async function(c) {
+      var allBks = await DB.getBookingsFromSupabase(c.id);
+      c.reservas_activas = allBks.filter(function(b){ return b.estado === 'reservado'; }).length;
+      return c;
+    }));
+
     container.innerHTML = '<div class="page-container">'
-      + '<div class="page-header"><div><h1>&#128101; Gestion de Clientes</h1><p>' + clients.length + ' clientes registrados</p></div></div>'
+      + '<div class="page-header"><div><h1>&#128101; Gestion de Clientes</h1><p>' + clients.length + ' clientes registrados en la nube</p></div></div>'
       + '<div class="table-container"><table class="data-table"><thead><tr><th>Cliente</th><th>Email</th><th>Telefono</th><th>Creditos Actuales</th><th>Reservas</th><th>Modificar Creditos</th></tr></thead><tbody>';
     
     var tbody = container.querySelector('tbody');
-    clients.forEach(function(c) {
-      var bks = DB.getBookings(c.id).filter(function(b){return b.estado==='reservado';}).length;
+    clientsWithBookings.forEach(function(c) {
       tbody.innerHTML += '<tr><td><div style="display:flex;align-items:center;gap:8px"><div class="attendee-avatar" style="width:32px;height:32px;font-size:.7rem">' + getInitials(c.nombre) + '</div><strong>' + c.nombre + '</strong></div></td>'
         + '<td>' + c.email + '</td><td>' + (c.telefono||'-') + '</td>'
         + '<td><span class="badge badge-' + (c.creditos>0?'success':'warning') + '" id="badge-cred-' + c.id + '">' + c.creditos + ' creditos</span></td>'
-        + '<td>' + bks + ' activas</td>'
+        + '<td>' + c.reservas_activas + ' activas</td>'
         + '<td><div style="display:flex;align-items:center;gap:8px;">'
         + '<input type="number" id="input-amt-' + c.id + '" value="1" min="1" style="width:60px; height:32px; padding:4px 8px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-input); color:var(--text-primary);">'
         + '<button class="btn btn-success btn-sm" data-action="add" data-uid="' + c.id + '">Sumar</button>'
@@ -279,7 +289,8 @@ Pages.adminClientes = function(container) {
     container.innerHTML += '</tbody></table></div></div>';
 
     async function updateCredits(userId, amount, op) {
-      var u = DB.getUser(userId);
+      // Buscamos el usuario fresco de la lista que ya tenemos
+      var u = clients.find(function(x){ return x.id === userId; });
       if (!u) return;
       
       var current = u.creditos || 0;
@@ -296,7 +307,8 @@ Pages.adminClientes = function(container) {
       await DB.updateUserInSupabase(u.id, {creditos: newValue});
       Toast.show('success', 'Créditos actualizados', u.nombre + ' ahora tiene ' + newValue + ' créditos');
       
-      Auth.refreshUser();
+      // Actualizar navbar si el admin se editó a si mismo (raro pero posible)
+      Auth.refreshUser(); 
       if(window.Router && Router.refreshNavbar) Router.refreshNavbar();
       render();
     }
