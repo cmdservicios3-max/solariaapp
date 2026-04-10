@@ -405,6 +405,17 @@ var DB = (function() {
     return d.mensajes;
   }
 
+  // Stats (Local fallback)
+  function getStats() {
+    var d = getData(); var today = new Date().toISOString().split('T')[0];
+    var clasesHoy = d.clases.filter(function(c){return c.fecha===today && c.activa;}).length;
+    var reservasActivas = d.reservas.filter(function(r){return r.estado==='reservado';}).length;
+    var pagosTotal = d.pagos.filter(function(p){return p.estado==='pagado';}).reduce(function(s,p){return s+p.monto;},0);
+    var pagosPendientes = d.pagos.filter(function(p){return p.estado==='pendiente';}).length;
+    var clientesActivos = d.usuarios.filter(function(u){return u.rol==='cliente' && u.activo;}).length;
+    return {clasesHoy:clasesHoy, reservasActivas:reservasActivas, ingresosTotales:pagosTotal, pagosPendientes:pagosPendientes, clientesActivos:clientesActivos};
+  }
+
   async function getAdminStatsFromSupabase() {
     try {
       if (typeof supabaseClient === 'undefined') return getStats();

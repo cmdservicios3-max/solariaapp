@@ -4,29 +4,40 @@
 
 // --- ADMIN DASHBOARD ---
 Pages.admin = async function(container) {
-  container.innerHTML = '<div class="page-container">'
-    + '<div class="page-header"><div><h1>&#128202; Panel de Administracion</h1><p>Consultando datos en tiempo real...</p></div></div>'
-    + '<div style="text-align:center;padding:100px 0;opacity:0.5;"><div style="font-size:3rem;margin-bottom:20px;">&#8987;</div>Sincronizando con la nube...</div>'
-    + '</div>';
-
   var today = new Date().toISOString().split('T')[0];
-  var [stats, todayClasses, recentBks] = await Promise.all([
-    DB.getAdminStatsFromSupabase(),
-    DB.getClassesFromSupabase(today),
-    DB.getRecentBookingsFromSupabase()
-  ]);
+  
+  try {
+    container.innerHTML = '<div class="page-container">'
+      + '<div class="page-header"><div><h1>&#128202; Panel de Administracion</h1><p>Sincronizando con Supabase...</p></div></div>'
+      + '<div id="admin-loading" style="text-align:center;padding:100px 0;opacity:0.5;"><div style="font-size:3rem;margin-bottom:20px;">&#8987;</div>Obteniendo datos de la nube...</div>'
+      + '</div>';
 
-  container.innerHTML = '<div class="page-container">'
-    + '<div class="page-header"><div><h1>&#128202; Panel de Administracion</h1><p>SOLARIA Estudio</p></div></div>'
-    + '<div class="metrics-grid">'
-    + '<div class="metric-card mc-p"><div class="metric-icon">&#128197;</div><div class="metric-value">' + stats.clasesHoy + '</div><div class="metric-label">Clases hoy</div></div>'
-    + '<div class="metric-card mc-s"><div class="metric-icon">&#128196;</div><div class="metric-value">' + stats.reservasActivas + '</div><div class="metric-label">Reservas activas</div></div>'
-    + '<div class="metric-card mc-g"><div class="metric-icon">&#128176;</div><div class="metric-value">' + formatMoney(stats.ingresosTotales) + '</div><div class="metric-label">Ingresos totales</div></div>'
-    + '<div class="metric-card mc-a"><div class="metric-icon">&#128101;</div><div class="metric-value">' + stats.clientesActivos + '</div><div class="metric-label">Clientes activos</div></div>'
-    + '</div>'
-    + buildTodayClassesTable(todayClasses)
-    + buildRecentBookingsTable(recentBks)
-    + '</div>';
+    var [stats, todayClasses, recentBks] = await Promise.all([
+      DB.getAdminStatsFromSupabase(),
+      DB.getClassesFromSupabase(today),
+      DB.getRecentBookingsFromSupabase()
+    ]);
+
+    container.innerHTML = '<div class="page-container">'
+      + '<div class="page-header"><div><h1>&#128202; Panel de Administracion</h1><p>SOLARIA Estudio</p></div></div>'
+      + '<div class="metrics-grid">'
+      + '<div class="metric-card mc-p"><div class="metric-icon">&#128197;</div><div class="metric-value">' + stats.clasesHoy + '</div><div class="metric-label">Clases hoy</div></div>'
+      + '<div class="metric-card mc-s"><div class="metric-icon">&#128196;</div><div class="metric-value">' + stats.reservasActivas + '</div><div class="metric-label">Reservas activas</div></div>'
+      + '<div class="metric-card mc-g"><div class="metric-icon">&#128176;</div><div class="metric-value">' + formatMoney(stats.ingresosTotales) + '</div><div class="metric-label">Ingresos totales</div></div>'
+      + '<div class="metric-card mc-a"><div class="metric-icon">&#128101;</div><div class="metric-value">' + stats.clientesActivos + '</div><div class="metric-label">Clientes activos</div></div>'
+      + '</div>'
+      + buildTodayClassesTable(todayClasses)
+      + buildRecentBookingsTable(recentBks)
+      + '</div>';
+  } catch (err) {
+    console.error("Fallo crítico en el dashboard admin:", err);
+    container.innerHTML = '<div class="page-container">'
+      + '<div class="page-header"><h1>&#9888; Error de Conexión</h1></div>'
+      + '<div class="card" style="text-align:center;padding:40px;">'
+      + '<p>No pudimos cargar los datos desde Supabase en este momento.</p>'
+      + '<button class="btn btn-primary" onclick="location.reload()">Reintentar Cargar</button>'
+      + '</div></div>';
+  }
 };
 
 function buildTodayClassesTable(cls) {
