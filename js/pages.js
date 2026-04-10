@@ -22,47 +22,82 @@ Pages.confirm = function(msg, onConfirm) {
 
 // --- LOGIN ---
 Pages.login = function(container) {
-  var isLogin = true;
+  var authMode = 'login'; // 'login', 'register', 'forgot'
   function render() {
+    var title = authMode === 'register' ? 'Registrarse' : authMode === 'forgot' ? 'Recuperar Cuenta' : 'Iniciar Sesión';
+    
     container.innerHTML = '<div class="login-container"><div class="login-card">'
-      + '<div class="login-logo"><span class="logo-icon">&#127947;</span><h1>SigueFit</h1><p>Gestion inteligente para tu estudio</p></div>'
-      + '<div class="login-tabs"><button class="login-tab'+(isLogin?' active':'')+'" id="tab-login">Iniciar Sesion</button>'
-      + '<button class="login-tab'+(!isLogin?' active':'')+'" id="tab-register">Registrarse</button></div>'
-      + '<form id="auth-form">' + (isLogin ? renderLoginForm() : renderRegisterForm()) + '</form>'
-      + '<div style="margin-top:24px;text-align:center;font-size:.75rem;color:var(--text-muted)">'
-      + 'Demo: admin@siguefit.com / admin123<br>Cliente: maria@test.com / 123456</div>'
+      + '<div class="login-logo" style="display:flex; flex-direction:column; align-items:center; margin-bottom:var(--space-xl);">'
+      + '<img src="img/logo-solaria-bkg.svg" alt="SOLARIA" style="height:80px; width:auto; margin-bottom:var(--space-md); filter: drop-shadow(0 4px 12px rgba(0,0,0,0.1));">'
+      + '<h1 style="margin-bottom:4px;">SOLARIA</h1>'
+      + '<p style="color:var(--text-secondary); font-size:.875rem;">Gestion inteligente para tu estudio</p></div>'
+      + '<div class="login-tabs">'
+      + '<button class="login-tab'+(authMode==='login'?' active':'')+'" id="tab-login">Iniciar Sesión</button>'
+      + '<button class="login-tab'+(authMode==='register'?' active':'')+'" id="tab-register">Registrarse</button>'
+      + '</div>'
+      + '<form id="auth-form">' + (authMode === 'register' ? renderRegisterForm() : authMode === 'forgot' ? renderForgotForm() : renderLoginForm()) + '</form>'
+      + '<div style="margin-top:20px; text-align:center;">'
+      + (authMode === 'login' ? '<a href="javascript:void(0)" id="link-forgot" style="font-size:0.875rem; color:var(--text-secondary); text-decoration:none;">¿Olvidaste tu contraseña?</a>' : '')
+      + (authMode === 'forgot' ? '<a href="javascript:void(0)" id="link-back-login" style="font-size:0.875rem; color:var(--text-secondary); text-decoration:none;">&#10229; Volver al inicio</a>' : '')
+      + '</div>'
       + '</div></div>';
-    document.getElementById('tab-login').onclick = function(){ isLogin=true; render(); };
-    document.getElementById('tab-register').onclick = function(){ isLogin=false; render(); };
+
+    document.getElementById('tab-login').onclick = function(){ authMode='login'; render(); };
+    document.getElementById('tab-register').onclick = function(){ authMode='register'; render(); };
+    var fLink = document.getElementById('link-forgot');
+    if (fLink) fLink.onclick = function(){ authMode='forgot'; render(); };
+    var bLink = document.getElementById('link-back-login');
+    if (bLink) bLink.onclick = function(){ authMode='login'; render(); };
+
     document.getElementById('auth-form').onsubmit = async function(e){
       e.preventDefault();
-      if (isLogin) {
-        var u = Auth.login(document.getElementById('email').value, document.getElementById('password').value);
+      if (authMode === 'login') {
+        var u = await Auth.login(document.getElementById('email').value, document.getElementById('password').value);
         if (u) Router.navigate(u.rol==='admin'?'/admin':'/dashboard');
-      } else {
+      } else if (authMode === 'register') {
         var u = await Auth.register(document.getElementById('nombre').value, document.getElementById('email').value, document.getElementById('password').value, document.getElementById('telefono').value);
         if (u) Router.navigate('/dashboard');
+      } else if (authMode === 'forgot') {
+        var success = await Auth.resetPassword(
+          document.getElementById('email').value, 
+          document.getElementById('telefono-verify').value,
+          document.getElementById('new-password').value
+        );
+        if (success) {
+          authMode = 'login';
+          render();
+        }
       }
     };
   }
   function renderLoginForm() {
     return '<div class="form-group"><label class="form-label">Email</label><input class="form-input" type="email" id="email" placeholder="tu@email.com" required></div>'
-      + '<div class="form-group"><label class="form-label">Contrasena</label><input class="form-input" type="password" id="password" placeholder="Tu contrasena" required></div>'
-      + '<button class="btn btn-primary btn-block btn-lg" type="submit" style="margin-top:8px">Iniciar Sesion</button>';
+      + '<div class="form-group"><label class="form-label">Contraseña</label><input class="form-input" type="password" id="password" placeholder="Tu contraseña" required></div>'
+      + '<button class="btn btn-primary btn-block btn-lg" type="submit" style="margin-top:8px">Iniciar Sesión</button>';
   }
   function renderRegisterForm() {
     return '<div class="form-group"><label class="form-label">Nombre completo</label><input class="form-input" type="text" id="nombre" placeholder="Tu nombre" required></div>'
       + '<div class="form-group"><label class="form-label">Email</label><input class="form-input" type="email" id="email" placeholder="tu@email.com" required></div>'
-      + '<div class="form-group"><label class="form-label">Telefono</label><input class="form-input" type="tel" id="telefono" placeholder="+54 11 5555-1234"></div>'
-      + '<div class="form-group"><label class="form-label">Contrasena</label><input class="form-input" type="password" id="password" placeholder="Min. 6 caracteres" required></div>'
+      + '<div class="form-group"><label class="form-label">Teléfono</label><input class="form-input" type="tel" id="telefono" placeholder="+54 11 5555-1234"></div>'
+      + '<div class="form-group"><label class="form-label">Contraseña</label><input class="form-input" type="password" id="password" placeholder="Min. 6 caracteres" required></div>'
       + '<button class="btn btn-primary btn-block btn-lg" type="submit" style="margin-top:8px">Crear Cuenta</button>';
+  }
+  function renderForgotForm() {
+    return '<div class="form-group" style="padding:16px; background:rgba(210,89,63,0.05); border:1px solid rgba(210,89,63,0.2); border-radius:var(--radius-md); margin-bottom:20px;">'
+      + '<p style="font-size:0.875rem; color:var(--primary); text-align:center; font-weight:600; margin:0;">&#9888; Aviso de Seguridad</p>'
+      + '<p style="font-size:0.75rem; color:var(--text-secondary); text-align:center; margin-top:4px;">Por seguridad, el cambio de contraseña requiere verificación del email y teléfono registrados.</p></div>'
+      + '<div class="form-group"><label class="form-label">Email de tu cuenta</label><input class="form-input" type="email" id="email" placeholder="tu@email.com" required></div>'
+      + '<div class="form-group"><label class="form-label">Teléfono registrado</label><input class="form-input" type="tel" id="telefono-verify" placeholder="Ej: +54 9 11 5555-1234" required></div>'
+      + '<div class="form-group"><label class="form-label">Nueva Contraseña</label><input class="form-input" type="password" id="new-password" placeholder="Establecer nueva clave" required></div>'
+      + '<button class="btn btn-primary btn-block btn-lg" type="submit" style="margin-top:8px">Validar y Restablecer</button>';
   }
   render();
 };
 
 // --- CLIENT DASHBOARD ---
-Pages.dashboard = function(container) {
-  var user = Auth.refreshUser();
+Pages.dashboard = async function(container) {
+  var user = await Auth.refreshUser();
+  if (!user) { Router.navigate('/login'); return; }
   var today = new Date();
   var selectedDate = today.toISOString().split('T')[0];
   var weekOffset = 0;
@@ -211,7 +246,7 @@ Pages.dashboard = function(container) {
       return; 
     }
     Toast.show('success','Reserva confirmada','Tu lugar está asegurado en la nube');
-    user = Auth.refreshUser(); // usuario local fresco 
+    user = await Auth.refreshUser(); // usuario local fresco 
     if(window.Router && Router.refreshNavbar) Router.refreshNavbar(); // navbar unificado
     render(); // dispara query global nuevo
   }
@@ -220,8 +255,9 @@ Pages.dashboard = function(container) {
 };
 
 // --- CLASS DETAIL ---
-Pages.classDetail = function(container, classId) {
-  var user = Auth.getCurrentUser();
+Pages.classDetail = async function(container, classId) {
+  var user = await Auth.getCurrentUser();
+  if (!user) { Router.navigate('/login'); return; }
   var cls = DB.getClass(parseInt(classId));
   if (!cls) { container.innerHTML = '<div class="page-container"><div class="empty-state"><h3>Clase no encontrada</h3></div></div>'; return; }
   var bookings = DB.getBookingsByClass(cls.id);
@@ -273,7 +309,7 @@ Pages.classDetail = function(container, classId) {
         return; 
       }
       Toast.show('success','Reserva confirmada','Tu lugar está asegurado en la nube');
-      Auth.refreshUser();
+      await Auth.refreshUser();
       if(window.Router && Router.refreshNavbar) Router.refreshNavbar();
       render();
     };
@@ -298,7 +334,7 @@ Pages.classDetail = function(container, classId) {
             return;
           }
           Toast.show('info','Reserva cancelada', r.isLate ? 'Cancelación tardía. El crédito no fue devuelto.' : 'Tu crédito fue devuelto a Supabase');
-          Auth.refreshUser();
+          await Auth.refreshUser();
           if(window.Router && Router.refreshNavbar) Router.refreshNavbar();
           render(); // al refrescar, la sincronizacion de la db mantendra compatibles los reads locales
         });
@@ -324,8 +360,9 @@ Pages.classDetail = function(container, classId) {
 };
 
 // --- MY BOOKINGS ---
-Pages.myBookings = function(container) {
-  var user = Auth.refreshUser();
+Pages.myBookings = async function(container) {
+  var user = await Auth.refreshUser();
+  if (!user) { Router.navigate('/login'); return; }
 
   async function render() {
     container.innerHTML = '<div class="page-container" style="text-align:center;padding:40px;">'

@@ -6,52 +6,16 @@ var DB = (function() {
   var data = null;
 
   function getDefaultData() {
-    var today = new Date();
-    var classes = [];
-    var tipos = [
-      {nombre:'Pilates Mat', tipo:'pilates', instructor:'Laura Gomez', duracion:60},
-      {nombre:'Yoga Flow', tipo:'yoga', instructor:'Carolina Paz', duracion:75},
-      {nombre:'Funcional', tipo:'funcional', instructor:'Martin Torres', duracion:45},
-      {nombre:'Pilates Reformer', tipo:'pilates', instructor:'Laura Gomez', duracion:60},
-      {nombre:'Stretching', tipo:'stretching', instructor:'Carolina Paz', duracion:45},
-      {nombre:'HIIT Express', tipo:'funcional', instructor:'Martin Torres', duracion:30},
-      {nombre:'Yoga Restaurativo', tipo:'yoga', instructor:'Ana Ruiz', duracion:90},
-      {nombre:'Barre Fitness', tipo:'barre', instructor:'Sofia Mendez', duracion:50}
-    ];
-    var horarios = ['07:00','08:00','09:30','10:30','17:00','18:00','19:00','20:00'];
-    var id = 1;
-    for (var d = 0; d < 14; d++) {
-      var fecha = new Date(today);
-      fecha.setDate(today.getDate() + d);
-      var dateStr = fecha.toISOString().split('T')[0];
-      var dow = fecha.getDay();
-      if (dow === 0) continue;
-      var numClases = dow === 6 ? 3 : 5;
-      for (var c = 0; c < numClases; c++) {
-        var t = tipos[c % tipos.length];
-        var cupo = 8 + Math.floor(Math.random() * 8);
-        var ocupados = d < 3 ? Math.floor(Math.random() * (cupo - 1)) : 0;
-        classes.push({
-          id: id++, studio_id:1, nombre:t.nombre, tipo:t.tipo,
-          instructor:t.instructor, fecha:dateStr, horario:horarios[c % horarios.length],
-          duracion:t.duracion, cupo_total:cupo, cupo_disponible:cupo - ocupados,
-          activa:1, created_at:new Date().toISOString()
-        });
-      }
-    }
     return {
       usuarios: [
-        {id:1,studio_id:1,nombre:'Admin Studio',email:'admin@siguefit.com',password:'admin123',telefono:'+5491155551234',rol:'admin',creditos:999,activo:1,created_at:new Date().toISOString()},
-        {id:2,studio_id:1,nombre:'Maria Lopez',email:'maria@test.com',password:'123456',telefono:'+5491155552222',rol:'cliente',creditos:5,activo:1,created_at:new Date().toISOString()},
-        {id:3,studio_id:1,nombre:'Juan Perez',email:'juan@test.com',password:'123456',telefono:'+5491155553333',rol:'cliente',creditos:2,activo:1,created_at:new Date().toISOString()},
-        {id:4,studio_id:1,nombre:'Lucia Fernandez',email:'lucia@test.com',password:'123456',telefono:'+5491155554444',rol:'cliente',creditos:0,activo:1,created_at:new Date().toISOString()}
+        {id: 1, studio_id: 1, nombre: 'Admin Studio', email: 'admin@siguefit.com', password: 'admin123', telefono: '+5491155551234', rol: 'admin', creditos: 0, activo: 1, created_at: new Date().toISOString()}
       ],
       clases: [],
       reservas: [],
       pagos: [],
       mensajes: [],
-      config: {studio_name:'SigueFit Studio', cancel_hours:12, class_price:2500, currency:'ARS'},
-      nextIds: {usuarios:5, reservas:1, pagos:1, mensajes:1, clases:1}
+      config: {studio_name: 'SOLARIA Estudio', cancel_hours: 12, class_price: 2500, currency: 'ARS'},
+      nextIds: {usuarios: 2, reservas: 1, pagos: 1, mensajes: 1, clases: 1}
     };
   }
 
@@ -80,6 +44,14 @@ var DB = (function() {
     d.usuarios.push(user); save(); return user;
   }
   function getUser(id) { return getData().usuarios.find(function(u){return u.id===id;}); }
+  function getUserByEmail(email) { return getData().usuarios.find(function(u){return u.email===email;}); }
+  function validateUserForReset(email, tel) { 
+    return getData().usuarios.find(function(u){
+      // Normalizamos telefonos para evitar errores por espacios o signos +
+      var cleanTel = function(t){ return t ? t.replace(/\D/g,'') : ''; };
+      return u.email === email && cleanTel(u.telefono) === cleanTel(tel);
+    }); 
+  }
   function updateUser(id, updates) {
     var d = getData(); var u = d.usuarios.find(function(u){return u.id===id;});
     if (u) { Object.assign(u, updates); save(); } return u;
@@ -437,7 +409,7 @@ var DB = (function() {
   }
 
   return {
-    load:load, save:save, reset:reset, login:login, register:register, getUser:getUser, addUserToSupabase:addUserToSupabase,
+    load:load, save:save, reset:reset, login:login, register:register, getUser:getUser, getUserByEmail:getUserByEmail, validateUserForReset:validateUserForReset, addUserToSupabase:addUserToSupabase,
     updateUser:updateUser, updateUserInSupabase:updateUserInSupabase, getClients:getClients, getClasses:getClasses, getClassesFromSupabase:getClassesFromSupabase, getClassDatesFromSupabase:getClassDatesFromSupabase, getClass:getClass,
     addClass:addClass, addClassToSupabase:addClassToSupabase, updateClass:updateClass, updateClassInSupabase:updateClassInSupabase, deleteClass:deleteClass, deleteClassFromSupabase:deleteClassFromSupabase, getClassDates:getClassDates,
     getBookings:getBookings, getBookingsByClass:getBookingsByClass, getBookingsFromSupabase:getBookingsFromSupabase, createBooking:createBooking, createBookingInSupabase:createBookingInSupabase,

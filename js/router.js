@@ -33,13 +33,13 @@ var Router = (function(){
     window.location.hash = path;
   }
 
-  function handleRoute() {
+  async function handleRoute() {
     var hash = window.location.hash.replace('#','') || '/login';
     var parts = hash.split('/').filter(Boolean);
     var path = '/' + parts[0];
     var param = parts[1] || null;
 
-    currentUser = Auth.getCurrentUser();
+    currentUser = await Auth.getCurrentUser();
 
     var route = routes[path];
     if (!route) { path = '/login'; route = routes[path]; }
@@ -80,7 +80,7 @@ var Router = (function(){
     var initials = u ? getInitials(u.nombre) : '?';
     var creditsHtml = !isAdmin ? '<div class="user-credits">&#11088; ' + u.creditos + ' creditos</div>' : '';
     return '<nav class="navbar" id="main-navbar">'
-      + '<div class="navbar-brand" onclick="Router.navigate(\'/'+( isAdmin?'admin':'dashboard')+'\')"><span class="brand-icon">&#127947;</span> SigueFit</div>'
+      + '<div class="navbar-brand" onclick="Router.navigate(\'/'+( isAdmin?'admin':'dashboard')+'\')"><img src="img/logo-solaria-bkg.svg" alt="SOLARIA" style="height:40px;width:auto;"></div>'
       + '<button class="hamburger" id="hamburger-btn">&#9776;</button>'
       + '<div class="navbar-nav" id="nav-menu">' + links + '</div>'
       + '<div class="navbar-user">' + creditsHtml
@@ -99,8 +99,8 @@ var Router = (function(){
     }
   }
 
-  function refreshNavbar() {
-    currentUser = Auth.refreshUser(); // re-evaluamos en caso de cambio global
+  async function refreshNavbar() {
+    currentUser = await Auth.refreshUser(); // re-evaluamos en caso de cambio global
     var nav = document.getElementById('main-navbar');
     if (nav) {
       nav.outerHTML = renderNavbar();

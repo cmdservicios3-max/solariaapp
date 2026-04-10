@@ -1,5 +1,5 @@
-﻿// ============================================
-// SigueFit - App Initialization
+// ============================================
+// SOLARIA - App Initialization
 // ============================================
 (function() {
   // Register routes
@@ -16,6 +16,6 @@
   Toast.init();
   Router.init();
 
-  console.log('%c SigueFit v1.0 ', 'background:linear-gradient(135deg,#6C5CE7,#00CEC9);color:white;font-size:14px;font-weight:bold;padding:8px 16px;border-radius:8px;');
+  console.log('%c SOLARIA v1.0 ', 'background:linear-gradient(135deg,#f39c12,#d35400);color:white;font-size:14px;font-weight:bold;padding:8px 16px;border-radius:8px;');
   console.log('Base de datos cargada:', DB.getData().clases.length, 'clases,', DB.getData().usuarios.length, 'usuarios');
 })();

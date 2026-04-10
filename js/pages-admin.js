@@ -7,7 +7,7 @@ Pages.admin = function(container) {
   var stats = DB.getStats();
   var config = DB.getData().config;
   container.innerHTML = '<div class="page-container">'
-    + '<div class="page-header"><div><h1>&#128202; Panel de Administracion</h1><p>' + config.studio_name + '</p></div></div>'
+    + '<div class="page-header"><div><h1>&#128202; Panel de Administracion</h1><p>SOLARIA Estudio</p></div></div>'
     + '<div class="metrics-grid">'
     + '<div class="metric-card mc-p"><div class="metric-icon">&#128197;</div><div class="metric-value">' + stats.clasesHoy + '</div><div class="metric-label">Clases hoy</div></div>'
     + '<div class="metric-card mc-s"><div class="metric-icon">&#128196;</div><div class="metric-value">' + stats.reservasActivas + '</div><div class="metric-label">Reservas activas</div></div>'
@@ -50,101 +50,132 @@ function renderRecentBookings() {
 
 // --- ADMIN CLASSES ---
 Pages.adminClases = function(container) {
-  var selectedDate = '';
-  var showModal = false;
   var editingClass = null;
 
-  var renderCounter = 0;
-
   async function render() {
-    var currentRender = ++renderCounter;
-
-    // Render inicial con loading incrustado en tbody
     container.innerHTML = '<div class="page-container">'
       + '<div class="page-header"><div><h1>&#128197; Gestion de Clases</h1><p>Crear, editar y administrar clases</p></div>'
       + '<button class="btn btn-primary" id="new-class-btn">&#10010; Nueva Clase</button></div>'
-      + '<div class="form-group" style="max-width:250px;margin-bottom:24px"><label class="form-label">Filtrar por fecha</label>'
-      + '<input type="date" class="form-input" id="date-filter" value="' + selectedDate + '"></div>'
-      + '<div class="table-container"><table class="data-table"><thead><tr><th>Fecha</th><th>Horario</th><th>Nombre</th><th>Tipo</th><th>Instructor</th><th>Cupo</th><th>Acciones</th></tr></thead><tbody id="admin-clases-tbody">'
-      + '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-secondary)">&#8987; Cargando clases desde Supabase...</td></tr>'
-      + '</tbody></table></div></div>';
+      + '<div id="calendar-container" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:var(--space-md);min-height:600px;color:var(--text-primary);">'
+      + '<div style="text-align:center;padding:40px;color:var(--text-secondary)">&#8987; Cargando calendario y clases...</div>'
+      + '</div></div>';
 
-    // Manejadores estáticos que no dependen de la tabla cargada
     document.getElementById('new-class-btn').onclick = function(){ openModal(null); };
-    document.getElementById('date-filter').onchange = function(e){ selectedDate = e.target.value; render(); };
 
-    // Fetch asíncrono
-    var clases = selectedDate ? await DB.getClassesFromSupabase(selectedDate) : await DB.getClassesFromSupabase();
-    
-    // Antirrebote/race condition al cambiar la fecha rápido
-    if (currentRender !== renderCounter) return;
-
+    var clases = await DB.getClassesFromSupabase();
     clases = clases || [];
-    clases.sort(function(a,b){ return a.fecha===b.fecha ? a.horario.localeCompare(b.horario) : a.fecha.localeCompare(b.fecha); });
 
-    var tbodyHTML = '';
-    if (clases.length === 0) {
-      tbodyHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-secondary)">No hay clases</td></tr>';
-    } else {
-      clases.forEach(function(c) {
-        tbodyHTML += '<tr><td>' + formatDate(c.fecha) + '</td><td><strong>' + c.horario + '</strong></td><td>' + c.nombre + '</td><td><span class="badge badge-primary">' + c.tipo + '</span></td><td>' + (c.instructor||'-') + '</td><td>' + (c.cupo_total-c.cupo_disponible) + '/' + c.cupo_total + '</td>'
-          + '<td><button class="btn btn-ghost btn-sm" data-edit="' + c.id + '">&#9998;</button> <button class="btn btn-danger btn-sm" data-delete="' + c.id + '">&#128465;</button></td></tr>';
-      });
-    }
+    var calendarEl = document.getElementById('calendar-container');
+    if (!calendarEl) return;
+    calendarEl.innerHTML = ''; 
 
-    // Actualizar e inyectar el contenido de la tabla
-    var tbody = document.getElementById('admin-clases-tbody');
-    if (tbody) {
-      tbody.innerHTML = tbodyHTML;
-      
-      // Reaplicar listeners a los nuevos botones
-      document.querySelectorAll('[data-edit]').forEach(function(btn){
-        btn.onclick = function(){ 
-          var classId = parseInt(btn.dataset.edit);
-          // Priorizamos la data fraîche recibida de supabase o caemos al local fallback
-          var clsToEdit = clases.find(function(c){ return c.id === classId; }) || DB.getClass(classId);
-          openModal(clsToEdit); 
+    // FullCalendar variables override for Dark Mode
+    calendarEl.style.setProperty('--fc-border-color', 'var(--border-color)');
+    calendarEl.style.setProperty('--fc-page-bg-color', 'var(--bg-card)');
+    calendarEl.style.setProperty('--fc-neutral-bg-color', 'var(--bg-secondary)');
+    calendarEl.style.setProperty('--fc-neutral-text-color', 'var(--text-primary)');
+    calendarEl.style.setProperty('--fc-today-bg-color', 'rgba(210,89,63,0.1)'); // primary tint
+    calendarEl.style.fontFamily = 'var(--font)';
+
+    var calendar = new FullCalendar.Calendar(calendarEl, {
+      initialView: window.innerWidth < 768 ? 'listMonth' : 'timeGridWeek',
+      headerToolbar: {
+        left: 'prev,next today',
+        center: 'title',
+        right: 'timeGridWeek,dayGridMonth,listMonth'
+      },
+      locale: 'es',
+      firstDay: 1,
+      slotMinTime: '06:00:00',
+      slotMaxTime: '22:00:00',
+      buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', list: 'Lista' },
+      events: clases.map(function(c) {
+        var startDT = c.fecha + 'T' + (c.horario || '00:00');
+        var ms = new Date(startDT).getTime() + (c.duracion * 60000);
+        var endDate = new Date(ms - (new Date().getTimezoneOffset() * 60000)).toISOString().slice(0,-1); // local adjustment helper if needed, but native ISO is safer
+        // Better cross-browser approach for end string
+        var d = new Date(startDT);
+        d.setMinutes(d.getMinutes() + c.duracion);
+        var endString = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + 'T' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':00';
+
+        var cap = (c.cupo_total - c.cupo_disponible);
+        return {
+          id: c.id,
+          title: c.nombre + ' (' + cap + '/' + c.cupo_total + ')',
+          start: startDT,
+          end: endString,
+          extendedProps: c,
+          backgroundColor: c.cupo_disponible <= 0 ? 'var(--danger)' : 'var(--primary)',
+          borderColor: 'transparent'
         };
-      });
-      
-      document.querySelectorAll('[data-delete]').forEach(function(btn){
-        btn.onclick = async function(){
-          if (confirm('Eliminar esta clase?')) {
-            btn.innerHTML = '...';
-            btn.disabled = true;
-            await DB.deleteClassFromSupabase(parseInt(btn.dataset.delete));
-            Toast.show('info','Clase eliminada','La clase fue removida del calendario');
-            render(); // vuelve a desencadenar read
-          }
-        };
-      });
-    }
+      }),
+      eventClick: function(info) {
+        var c = info.event.extendedProps;
+        var clsToEdit = clases.find(function(x){return x.id === c.id;}) || DB.getClass(c.id);
+        openModal(clsToEdit);
+      },
+      dateClick: function(info) {
+        var newCls = { fecha: info.dateStr.split('T')[0] };
+        if (info.dateStr.includes('T')) {
+           newCls.horario = info.dateStr.split('T')[1].substring(0,5);
+        }
+        openModal(newCls);
+      }
+    });
+    calendar.render();
   }
 
   function openModal(cls) {
-    editingClass = cls;
-    var isEdit = !!cls;
+    editingClass = cls && cls.id ? cls : null;
+    var isEdit = !!editingClass;
+    // Si viene de dateClick tendra fecha pero no id
+    var defaultFecha = cls && cls.fecha ? cls.fecha : new Date().toISOString().split('T')[0];
+    var defaultHorario = cls && cls.horario ? cls.horario : '09:00';
+
     var overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.id = 'class-modal';
     overlay.innerHTML = '<div class="modal"><div class="modal-header"><h3 class="modal-title">' + (isEdit?'Editar':'Nueva') + ' Clase</h3><button class="modal-close" id="modal-close-btn">&times;</button></div>'
       + '<div class="modal-body"><form id="class-form">'
-      + '<div class="form-group"><label class="form-label">Nombre</label><input class="form-input" id="cf-nombre" value="' + (cls?cls.nombre:'') + '" required placeholder="Ej: Pilates Mat"></div>'
-      + '<div class="form-group"><label class="form-label">Tipo</label><select class="form-input" id="cf-tipo"><option value="pilates"' + (cls&&cls.tipo==='pilates'?' selected':'') + '>Pilates</option><option value="yoga"' + (cls&&cls.tipo==='yoga'?' selected':'') + '>Yoga</option><option value="funcional"' + (cls&&cls.tipo==='funcional'?' selected':'') + '>Funcional</option><option value="stretching"' + (cls&&cls.tipo==='stretching'?' selected':'') + '>Stretching</option><option value="barre"' + (cls&&cls.tipo==='barre'?' selected':'') + '>Barre</option></select></div>'
-      + '<div class="form-group"><label class="form-label">Instructor</label><input class="form-input" id="cf-inst" value="' + (cls?cls.instructor:'') + '" placeholder="Nombre del instructor"></div>'
+      + '<div class="form-group"><label class="form-label">Nombre</label><input class="form-input" id="cf-nombre" value="' + (editingClass?editingClass.nombre:'Pilates Mat') + '" required placeholder="Ej: Pilates Mat"></div>'
+      + '<div class="form-group"><label class="form-label">Tipo</label><select class="form-input" id="cf-tipo"><option value="pilates"' + (editingClass&&editingClass.tipo==='pilates'?' selected':'') + '>Pilates</option><option value="yoga"' + (editingClass&&editingClass.tipo==='yoga'?' selected':'') + '>Yoga</option><option value="funcional"' + (editingClass&&editingClass.tipo==='funcional'?' selected':'') + '>Funcional</option><option value="stretching"' + (editingClass&&editingClass.tipo==='stretching'?' selected':'') + '>Stretching</option><option value="barre"' + (editingClass&&editingClass.tipo==='barre'?' selected':'') + '>Barre</option></select></div>'
+      + '<div class="form-group"><label class="form-label">Instructor</label><input class="form-input" id="cf-inst" value="' + (editingClass?editingClass.instructor:'') + '" placeholder="Nombre del instructor"></div>'
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
-      + '<div class="form-group"><label class="form-label">Fecha</label><input type="date" class="form-input" id="cf-fecha" value="' + (cls?cls.fecha:new Date().toISOString().split('T')[0]) + '" required></div>'
-      + '<div class="form-group"><label class="form-label">Horario</label><input type="time" class="form-input" id="cf-horario" value="' + (cls?cls.horario:'09:00') + '" required></div></div>'
+      + '<div class="form-group"><label class="form-label">Fecha de Inicio</label><input type="date" class="form-input" id="cf-fecha" value="' + defaultFecha + '" required></div>'
+      + '<div class="form-group"><label class="form-label">Horario</label><input type="time" class="form-input" id="cf-horario" value="' + defaultHorario + '" required></div></div>'
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
-      + '<div class="form-group"><label class="form-label">Duracion (min)</label><input type="number" class="form-input" id="cf-duracion" value="' + (cls?cls.duracion:60) + '" min="15" max="180" required></div>'
-      + '<div class="form-group"><label class="form-label">Cupo maximo</label><input type="number" class="form-input" id="cf-cupo" value="' + (cls?cls.cupo_total:10) + '" min="1" max="50" required></div></div>'
-      + '<div class="modal-footer" style="padding:16px 0 0;border:none"><button type="button" class="btn btn-ghost" id="modal-cancel-btn">Cancelar</button><button type="submit" class="btn btn-primary" id="modal-save-btn">' + (isEdit?'Guardar':'Crear Clase') + '</button></div>'
+      + '<div class="form-group"><label class="form-label">Duracion (min)</label><input type="number" class="form-input" id="cf-duracion" value="' + (editingClass?editingClass.duracion:60) + '" min="15" max="180" required></div>'
+      + '<div class="form-group"><label class="form-label">Cupo maximo</label><input type="number" class="form-input" id="cf-cupo" value="' + (editingClass?editingClass.cupo_total:10) + '" min="1" max="50" required></div></div>'
+      + (isEdit ? '' : '<div class="form-group" style="padding:16px; border:1px solid var(--border-color); border-radius:var(--radius-md); background:var(--bg-card);"><label class="form-label" style="display:flex;align-items:center;gap:8px;margin:0;cursor:pointer;"><input type="checkbox" id="cf-repeat" onchange="document.getElementById(\'repeat-options\').style.display=this.checked?\'block\':\'none\'"> Programar clases concurrentes (Repetir)</label>'
+      + '<div id="repeat-options" style="display:none; margin-top:16px;">'
+      + '<div style="margin-bottom:8px;font-size:0.875rem;color:var(--text-secondary);">Dias de la semana:</div>'
+      + '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">'
+      + ['Dom','Lun','Mar','Mie','Jue','Vie','Sab'].map(function(d,i){return '<label style="font-size:0.875rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="cf-rep-day" value="'+i+'"> '+d+'</label>';}).join('')
+      + '</div>'
+      + '<div class="form-group"><label class="form-label">Repetir hasta (inclusive)</label><input type="date" class="form-input" id="cf-rep-until"></div>'
+      + '</div></div>')
+      + '<div class="modal-footer" style="padding:16px 0 0;border:none;justify-content:space-between">'
+      + (isEdit ? '<button type="button" class="btn btn-danger" id="modal-delete-btn">&#128465; Eliminar</button>' : '<div></div>')
+      + '<div style="display:flex;gap:8px;"><button type="button" class="btn btn-ghost" id="modal-cancel-btn">Cancelar</button><button type="submit" class="btn btn-primary" id="modal-save-btn">' + (isEdit?'Guardar':'Crear Clase') + '</button></div></div>'
       + '</form></div></div>';
     document.body.appendChild(overlay);
 
     document.getElementById('modal-close-btn').onclick = function(){ overlay.remove(); };
     document.getElementById('modal-cancel-btn').onclick = function(){ overlay.remove(); };
     overlay.onclick = function(e){ if(e.target===overlay) overlay.remove(); };
+
+    var delBtn = document.getElementById('modal-delete-btn');
+    if (delBtn) {
+      delBtn.onclick = async function() {
+        if (confirm('¿Eliminar esta clase permanentemente?')) {
+          delBtn.innerHTML = '...'; delBtn.disabled = true;
+          await DB.deleteClassFromSupabase(editingClass.id);
+          Toast.show('info','Clase eliminada','Removida del calendario');
+          overlay.remove();
+          render();
+        }
+      };
+    }
 
     document.getElementById('class-form').onsubmit = async function(e) {
       e.preventDefault();
@@ -158,22 +189,64 @@ Pages.adminClases = function(container) {
         fecha: document.getElementById('cf-fecha').value,
         horario: document.getElementById('cf-horario').value,
         duracion: parseInt(document.getElementById('cf-duracion').value),
-        cupo_total: parseInt(document.getElementById('cf-cupo').value)
+        cupo_total: parseInt(document.getElementById('cf-cupo').value),
+        activa: true
       };
       
       if (isEdit) {
-        var diff = data.cupo_total - cls.cupo_total;
-        data.cupo_disponible = cls.cupo_disponible + diff;
+        var diff = data.cupo_total - editingClass.cupo_total;
+        data.cupo_disponible = editingClass.cupo_disponible + diff;
         if (data.cupo_disponible < 0) data.cupo_disponible = 0;
-        await DB.updateClassInSupabase(cls.id, data);
+        await DB.updateClassInSupabase(editingClass.id, data);
         Toast.show('success','Clase actualizada', data.nombre);
+        overlay.remove();
+        render();
       } else {
         data.cupo_disponible = data.cupo_total;
-        await DB.addClassToSupabase(data);
-        Toast.show('success','Clase creada', data.nombre + ' el ' + formatDate(data.fecha));
+        var repeatCb = document.getElementById('cf-repeat');
+        if (repeatCb && repeatCb.checked) {
+          // Logica concurrente
+          var startDateStr = data.fecha + 'T00:00:00'; // Fuerza inicio a las 00h de forma predecible timezone-agnostic local
+          var parts = data.fecha.split('-');
+          var startDate = new Date(parts[0], parts[1]-1, parts[2]);
+          
+          var untilVal = document.getElementById('cf-rep-until').value;
+          if (!untilVal) { Toast.show('error','Error','Falta la fecha de fin'); saveBtn.disabled = false; saveBtn.innerHTML = 'Crear Clase'; return; }
+          var uParts = untilVal.split('-');
+          var endDate = new Date(uParts[0], uParts[1]-1, uParts[2]);
+          
+          if (endDate < startDate) { Toast.show('error','Error','Fecha fin menor a inicio'); saveBtn.disabled = false; saveBtn.innerHTML = 'Crear Clase'; return; }
+          var selectedDays = Array.from(document.querySelectorAll('.cf-rep-day:checked')).map(function(cb){ return parseInt(cb.value); });
+          if (selectedDays.length === 0) { Toast.show('error','Error','Elija al menos un dia de repetición'); saveBtn.disabled = false; saveBtn.innerHTML = 'Crear Clase'; return; }
+          
+          Toast.show('info','Creando Multiples Clases','Sincronizando con nube...');
+          var current = new Date(startDate);
+          var promises = [];
+          
+          while (current <= endDate) {
+            if (selectedDays.includes(current.getDay())) {
+              var clone = Object.assign({}, data);
+              clone.fecha = current.getFullYear() + "-" + String(current.getMonth()+1).padStart(2,'0') + "-" + String(current.getDate()).padStart(2,'0');
+              promises.push(DB.addClassToSupabase(clone));
+            }
+            current.setDate(current.getDate() + 1);
+          }
+          
+          if(promises.length === 0){ Toast.show('warning','Cuidado','Las fechas no contienen esos dias elegidos'); saveBtn.disabled = false; saveBtn.innerHTML = 'Crear Clase'; return; }
+          await Promise.all(promises);
+          Toast.show('success','Repetición Completa', promises.length + ' clases generadas masivamente.');
+          overlay.remove();
+          render();
+        } else {
+          try {
+             var res = await DB.addClassToSupabase(data);
+             if(!res) { Toast.show('error','Error', 'Falló la conexion con Supabase'); saveBtn.disabled = false; saveBtn.innerHTML = 'Crear Clase'; return; }
+             Toast.show('success','Clase creada', data.nombre + ' en ' + data.fecha);
+          } catch(err){ console.error(err); }
+          overlay.remove();
+          render();
+        }
       }
-      overlay.remove();
-      render();
     };
   }
   render();
@@ -181,41 +254,67 @@ Pages.adminClases = function(container) {
 
 // --- ADMIN CLIENTS ---
 Pages.adminClientes = function(container) {
-  function render() {
+  async function render() {
     var clients = DB.getClients();
     container.innerHTML = '<div class="page-container">'
       + '<div class="page-header"><div><h1>&#128101; Gestion de Clientes</h1><p>' + clients.length + ' clientes registrados</p></div></div>'
-      + '<div class="table-container"><table class="data-table"><thead><tr><th>Cliente</th><th>Email</th><th>Telefono</th><th>Creditos</th><th>Reservas</th><th>Acciones</th></tr></thead><tbody>';
+      + '<div class="table-container"><table class="data-table"><thead><tr><th>Cliente</th><th>Email</th><th>Telefono</th><th>Creditos Actuales</th><th>Reservas</th><th>Modificar Creditos</th></tr></thead><tbody>';
+    
+    var tbody = container.querySelector('tbody');
     clients.forEach(function(c) {
       var bks = DB.getBookings(c.id).filter(function(b){return b.estado==='reservado';}).length;
-      container.querySelector('tbody').innerHTML += '<tr><td><div style="display:flex;align-items:center;gap:8px"><div class="attendee-avatar" style="width:32px;height:32px;font-size:.7rem">' + getInitials(c.nombre) + '</div><strong>' + c.nombre + '</strong></div></td>'
+      tbody.innerHTML += '<tr><td><div style="display:flex;align-items:center;gap:8px"><div class="attendee-avatar" style="width:32px;height:32px;font-size:.7rem">' + getInitials(c.nombre) + '</div><strong>' + c.nombre + '</strong></div></td>'
         + '<td>' + c.email + '</td><td>' + (c.telefono||'-') + '</td>'
-        + '<td><span class="badge badge-' + (c.creditos>0?'success':'warning') + '">' + c.creditos + ' creditos</span></td>'
+        + '<td><span class="badge badge-' + (c.creditos>0?'success':'warning') + '" id="badge-cred-' + c.id + '">' + c.creditos + ' creditos</span></td>'
         + '<td>' + bks + ' activas</td>'
-        + '<td><button class="btn btn-success btn-sm" data-addcred="' + c.id + '">+1 Credito</button> <button class="btn btn-ghost btn-sm" data-addcred5="' + c.id + '">+5</button></td></tr>';
+        + '<td><div style="display:flex;align-items:center;gap:8px;">'
+        + '<input type="number" id="input-amt-' + c.id + '" value="1" min="1" style="width:60px; height:32px; padding:4px 8px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-input); color:var(--text-primary);">'
+        + '<button class="btn btn-success btn-sm" data-action="add" data-uid="' + c.id + '">Sumar</button>'
+        + '<button class="btn btn-danger btn-sm" data-action="sub" data-uid="' + c.id + '">Restar</button>'
+        + '</div><div style="margin-top:8px; display:flex; gap:8px;">'
+        + '<button class="btn btn-ghost btn-xs" data-quick="1" data-uid="' + c.id + '">+1 rapido</button>'
+        + '<button class="btn btn-ghost btn-xs" data-quick="5" data-uid="' + c.id + '">+5 rapido</button>'
+        + '</div></td></tr>';
     });
     container.innerHTML += '</tbody></table></div></div>';
 
-    document.querySelectorAll('[data-addcred]').forEach(function(btn){
-      btn.onclick = async function() {
-        var u = DB.getUser(parseInt(btn.dataset.addcred));
-        btn.disabled = true; btn.innerHTML = '...';
-        await DB.updateUserInSupabase(u.id, {creditos: u.creditos + 1});
-        Toast.show('success','Credito agregado', u.nombre + ' ahora tiene ' + (u.creditos+1) + ' creditos');
-        Auth.refreshUser();
-        if(window.Router && Router.refreshNavbar) Router.refreshNavbar();
-        render();
+    async function updateCredits(userId, amount, op) {
+      var u = DB.getUser(userId);
+      if (!u) return;
+      
+      var current = u.creditos || 0;
+      var newValue = op === 'add' ? current + amount : current - amount;
+
+      if (newValue < 0) {
+        Toast.show('error', 'Error', 'El cliente no puede tener créditos negativos');
+        return;
+      }
+
+      var btn = document.querySelector('[data-uid="' + userId + '"][data-action="' + op + '"]');
+      if (btn) { btn.disabled = true; btn.innerHTML = '...'; }
+
+      await DB.updateUserInSupabase(u.id, {creditos: newValue});
+      Toast.show('success', 'Créditos actualizados', u.nombre + ' ahora tiene ' + newValue + ' créditos');
+      
+      Auth.refreshUser();
+      if(window.Router && Router.refreshNavbar) Router.refreshNavbar();
+      render();
+    }
+
+    document.querySelectorAll('[data-action]').forEach(function(btn){
+      btn.onclick = function() {
+        var uid = parseInt(btn.dataset.uid);
+        var amt = parseInt(document.getElementById('input-amt-' + uid).value) || 0;
+        if (amt <= 0) { Toast.show('warning', 'Atención', 'Ingresa una cantidad válida'); return; }
+        updateCredits(uid, amt, btn.dataset.action);
       };
     });
-    document.querySelectorAll('[data-addcred5]').forEach(function(btn){
-      btn.onclick = async function() {
-        var u = DB.getUser(parseInt(btn.dataset.addcred5));
-        btn.disabled = true; btn.innerHTML = '...';
-        await DB.updateUserInSupabase(u.id, {creditos: u.creditos + 5});
-        Toast.show('success','5 Creditos agregados', u.nombre + ' ahora tiene ' + (u.creditos+5) + ' creditos');
-        Auth.refreshUser();
-        if(window.Router && Router.refreshNavbar) Router.refreshNavbar();
-        render();
+
+    document.querySelectorAll('[data-quick]').forEach(function(btn){
+      btn.onclick = function() {
+        var uid = parseInt(btn.dataset.uid);
+        var amt = parseInt(btn.dataset.quick);
+        updateCredits(uid, amt, 'add');
       };
     });
   }
