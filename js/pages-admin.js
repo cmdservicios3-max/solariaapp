@@ -3,9 +3,19 @@
 // ============================================
 
 // --- ADMIN DASHBOARD ---
-Pages.admin = function(container) {
-  var stats = DB.getStats();
-  var config = DB.getData().config;
+Pages.admin = async function(container) {
+  container.innerHTML = '<div class="page-container">'
+    + '<div class="page-header"><div><h1>&#128202; Panel de Administracion</h1><p>Consultando datos en tiempo real...</p></div></div>'
+    + '<div style="text-align:center;padding:100px 0;opacity:0.5;"><div style="font-size:3rem;margin-bottom:20px;">&#8987;</div>Sincronizando con la nube...</div>'
+    + '</div>';
+
+  var today = new Date().toISOString().split('T')[0];
+  var [stats, todayClasses, recentBks] = await Promise.all([
+    DB.getAdminStatsFromSupabase(),
+    DB.getClassesFromSupabase(today),
+    DB.getRecentBookingsFromSupabase()
+  ]);
+
   container.innerHTML = '<div class="page-container">'
     + '<div class="page-header"><div><h1>&#128202; Panel de Administracion</h1><p>SOLARIA Estudio</p></div></div>'
     + '<div class="metrics-grid">'
@@ -14,14 +24,12 @@ Pages.admin = function(container) {
     + '<div class="metric-card mc-g"><div class="metric-icon">&#128176;</div><div class="metric-value">' + formatMoney(stats.ingresosTotales) + '</div><div class="metric-label">Ingresos totales</div></div>'
     + '<div class="metric-card mc-a"><div class="metric-icon">&#128101;</div><div class="metric-value">' + stats.clientesActivos + '</div><div class="metric-label">Clientes activos</div></div>'
     + '</div>'
-    + renderTodayClasses()
-    + renderRecentBookings()
+    + buildTodayClassesTable(todayClasses)
+    + buildRecentBookingsTable(recentBks)
     + '</div>';
 };
 
-function renderTodayClasses() {
-  var today = new Date().toISOString().split('T')[0];
-  var cls = DB.getClasses(today);
+function buildTodayClassesTable(cls) {
   cls.sort(function(a,b){ return a.horario.localeCompare(b.horario); });
   var html = '<div class="section-header"><h2 class="section-title">&#128197; Clases de Hoy</h2></div>';
   if (cls.length === 0) return html + '<div class="card"><p class="text-muted">No hay clases programadas para hoy</p></div>';
@@ -34,14 +42,13 @@ function renderTodayClasses() {
   return html + '</tbody></table></div>';
 }
 
-function renderRecentBookings() {
-  var bks = DB.getBookings().filter(function(b){return b.estado==='reservado';}).slice(-5).reverse();
+function buildRecentBookingsTable(bks) {
   var html = '<div class="section-header" style="margin-top:32px"><h2 class="section-title">&#128196; Ultimas Reservas</h2></div>';
-  if (bks.length === 0) return html + '<div class="card"><p class="text-muted">No hay reservas recientes</p></div>';
+  if (bks.length === 0) return html + '<div class="card"><p class="text-muted">No hay actividad reciente en la nube</p></div>';
   html += '<div class="table-container"><table class="data-table"><thead><tr><th>Cliente</th><th>Clase</th><th>Fecha</th><th>Estado</th></tr></thead><tbody>';
   bks.forEach(function(b) {
-    var u = DB.getUser(b.usuario_id);
-    var c = DB.getClass(b.clase_id);
+    var u = b.usuarios;
+    var c = b.clases;
     if (!u || !c) return;
     html += '<tr><td><div style="display:flex;align-items:center;gap:8px"><div class="attendee-avatar" style="width:28px;height:28px;font-size:.65rem">' + getInitials(u.nombre) + '</div>' + u.nombre + '</div></td><td>' + c.nombre + '</td><td>' + formatDate(c.fecha) + ' ' + c.horario + '</td><td><span class="badge badge-success">Confirmada</span></td></tr>';
   });

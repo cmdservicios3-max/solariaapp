@@ -405,15 +405,41 @@ var DB = (function() {
     return d.mensajes;
   }
 
-  // Stats
-  function getStats() {
-    var d = getData(); var today = new Date().toISOString().split('T')[0];
-    var clasesHoy = d.clases.filter(function(c){return c.fecha===today && c.activa;}).length;
-    var reservasActivas = d.reservas.filter(function(r){return r.estado==='reservado';}).length;
-    var pagosTotal = d.pagos.filter(function(p){return p.estado==='pagado';}).reduce(function(s,p){return s+p.monto;},0);
-    var pagosPendientes = d.pagos.filter(function(p){return p.estado==='pendiente';}).length;
-    var clientesActivos = d.usuarios.filter(function(u){return u.rol==='cliente' && u.activo;}).length;
-    return {clasesHoy:clasesHoy, reservasActivas:reservasActivas, ingresosTotales:pagosTotal, pagosPendientes:pagosPendientes, clientesActivos:clientesActivos};
+  async function getAdminStatsFromSupabase() {
+    try {
+      if (typeof supabaseClient === 'undefined') return getStats();
+      var today = new Date().toISOString().split('T')[0];
+      
+      var [clases, reservas, clientes] = await Promise.all([
+        supabaseClient.from('clases').select('*', { count: 'exact', head: true }).eq('fecha', today).neq('activa', false),
+        supabaseClient.from('reservas').select('*', { count: 'exact', head: true }).eq('estado', 'reservado'),
+        supabaseClient.from('usuarios').select('*', { count: 'exact', head: true }).eq('rol', 'cliente').eq('activo', true)
+      ]);
+
+      return {
+        clasesHoy: clases.count || 0,
+        reservasActivas: reservas.count || 0,
+        ingresosTotales: 0, // Migracion de pagos pendiente
+        clientesActivos: clientes.count || 0
+      };
+    } catch (e) {
+      console.error("Error al obtener estadisticas de Supabase:", e);
+      return getStats();
+    }
+  }
+
+  async function getRecentBookingsFromSupabase() {
+    try {
+      if (typeof supabaseClient === 'undefined') return [];
+      var { data, error } = await supabaseClient
+        .from('reservas')
+        .select('*, usuarios(nombre), clases(nombre, fecha, horario)')
+        .eq('estado', 'reservado')
+        .order('created_at', { ascending: false })
+        .limit(5);
+      if (error) { console.error('Error al obtener actividad reciente:', error.message); return []; }
+      return data || [];
+    } catch (e) { console.error(e); return []; }
   }
 
   return {
@@ -422,7 +448,7 @@ var DB = (function() {
     addClass:addClass, addClassToSupabase:addClassToSupabase, updateClass:updateClass, updateClassInSupabase:updateClassInSupabase, deleteClass:deleteClass, deleteClassFromSupabase:deleteClassFromSupabase, getClassDates:getClassDates,
     getBookings:getBookings, getBookingsByClass:getBookingsByClass, getBookingsFromSupabase:getBookingsFromSupabase, createBooking:createBooking, createBookingInSupabase:createBookingInSupabase,
     cancelBooking:cancelBooking, cancelBookingInSupabase:cancelBookingInSupabase, getPayments:getPayments, simulatePayment:simulatePayment,
-    addMessage:addMessage, getMessages:getMessages, getStats:getStats, getData:getData
+    addMessage:addMessage, getMessages:getMessages, getStats:getStats, getAdminStatsFromSupabase:getAdminStatsFromSupabase, getRecentBookingsFromSupabase:getRecentBookingsFromSupabase, getData:getData
   };
 })();
 DB.load();
