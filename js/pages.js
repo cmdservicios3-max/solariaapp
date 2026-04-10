@@ -98,72 +98,86 @@ Pages.login = function(container) {
 Pages.dashboard = async function(container) {
   var user = await Auth.refreshUser();
   if (!user) { Router.navigate('/login'); return; }
-  var today = new Date();
-  var selectedDate = today.toISOString().split('T')[0];
-  var weekOffset = 0;
+
+  // Variables de estado
+  var now = new Date();
   var filterType = 'todas';
+  var weekOffset = 0;
   var renderCounter = 0;
 
-  async function render() {
-    var currentRender = ++renderCounter;
+  // Calculamos el lunes de la semana actual como base inmutable
+  var day = now.getDay();
+  var diff = (day === 0 ? -6 : 1) - day;
+  var currentMonday = new Date(now);
+  currentMonday.setDate(now.getDate() + diff);
+  currentMonday.setHours(0,0,0,0);
 
-    // 1. Mostrar layout esqueleto mientras ambos calls a la red terminan
-    container.innerHTML = '<div class="page-container">'
-      + '<div class="page-header"><div><h1>&#127947; Clases Disponibles</h1><p>Reserva tu lugar en la proxima clase</p></div>'
-      + '<div class="user-credits" style="font-size:.875rem;padding:8px 16px">&#11088; ' + user.creditos + ' creditos disponibles</div></div>'
-      + '<div id="calendar-skeleton" style="padding:20px;text-align:center;color:var(--text-secondary)">Cargando calendario...</div>'
-      + renderFilters()
-      + '<div class="classes-grid" id="classes-grid" style="display:block; text-align:center; padding:40px 0;">'
-      + '<div style="font-size:2.5rem; margin-bottom:16px; opacity:0.8">&#8987;</div>'
-      + '<div style="color:var(--text-secondary); font-weight:500;">Cargando clases desde Supabase...</div>'
-      + '</div></div>';
+  // Fecha seleccionada por defecto: Hoy si es esta semana, o el Lunes si es otra
+  var selectedDate = now.toISOString().split('T')[0];
 
-    // 2. Fetch asíncrono combinado desde Supabase
+  // Render inicial de la estructura fija
+  container.innerHTML = '<div class="page-container">'
+    + '<div class="page-header"><div><h1>&#127947; Clases Disponibles</h1><p>Reserva tu lugar en la proxima clase</p></div>'
+    + '<div class="user-credits" style="font-size:.875rem;padding:8px 16px">&#11088; ' + user.creditos + ' creditos disponibles</div></div>'
+    + '<div id="calendar-area"></div>'
+    + renderFilters()
+    + '<div id="classes-area"></div>'
+    + '</div>';
+
+  async function update() {
+    var curRequest = ++renderCounter;
+    
+    // UI Feedback: Opacidad mientras carga
+    var calArea = document.getElementById('calendar-area');
+    var clsArea = document.getElementById('classes-area');
+    if (calArea) calArea.style.opacity = '0.5';
+    if (clsArea) clsArea.innerHTML = '<div style="text-align:center;padding:40px;opacity:0.6;"><div style="font-size:2rem;margin-bottom:12px;">&#8987;</div>Cargando clases...</div>';
+
+    // Fetch de datos
     var [cls, datesMap] = await Promise.all([
       DB.getClassesFromSupabase(selectedDate),
       DB.getClassDatesFromSupabase()
     ]);
-    
-    // Evitar race conditions
-    if (currentRender !== renderCounter) return;
 
-    // 3. Reemplazar Esqueleto de Calendario y volver a atar eventos
-    var calSkeleton = document.getElementById('calendar-skeleton');
-    if (calSkeleton) {
-      calSkeleton.outerHTML = renderCalendar(datesMap);
-      bindCalendar();
+    if (curRequest !== renderCounter) return;
+
+    // Renderizado de sub-componentes
+    if (calArea) {
+      calArea.style.opacity = '1';
+      calArea.innerHTML = buildCalendarHTML(datesMap);
+      bindCalendarEvents();
     }
-
-    // 4. Aplicar filtros locales y ordenamientos
-    if (filterType !== 'todas') cls = cls.filter(function(c){ return c.tipo === filterType; });
-    cls.sort(function(a,b){ return a.horario.localeCompare(b.horario); });
-
-    // 5. Actualizar el grid con los datos reales
-    var grid = document.getElementById('classes-grid');
-    if (grid) {
-      grid.style = ''; // Quitar el block styling inline de carga
-      grid.innerHTML = renderClasses(cls);
-      bindClassCards();
+    
+    if (clsArea) {
+      if (filterType !== 'todas') cls = cls.filter(function(c){ return c.tipo === filterType; });
+      cls.sort(function(a,b){ return a.horario.localeCompare(b.horario); });
+      clsArea.innerHTML = buildClassesHTML(cls);
+      bindClassEvents();
     }
   }
 
-  function renderCalendar(datesMap) {
-    if (!datesMap) datesMap = {};
+  function buildCalendarHTML(datesMap) {
     var dias = ['Dom','Lun','Mar','Mie','Jue','Vie','Sab'];
     var meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-    var start = new Date(today);
-    start.setDate(today.getDate() + (weekOffset * 7));
-    var monthYear = meses[start.getMonth()] + ' ' + start.getFullYear();
+    
+    var startOfWeek = new Date(currentMonday);
+    startOfWeek.setDate(currentMonday.getDate() + (weekOffset * 7));
+    
+    var monthYear = meses[startOfWeek.getMonth()] + ' ' + startOfWeek.getFullYear();
+    
     var html = '<div class="calendar-header"><div class="calendar-title">' + monthYear + '</div>'
       + '<div class="calendar-nav"><button id="cal-prev">&#9664;</button><button id="cal-today" style="width:auto;padding:0 12px;font-size:.75rem">Hoy</button><button id="cal-next">&#9654;</button></div></div>'
-      + '<div class="calendar-days">';
+      + '<div class="calendar-days" id="swipe-zone">';
+    
     for (var i = 0; i < 7; i++) {
-      var d = new Date(start);
-      d.setDate(start.getDate() + i);
+      var d = new Date(startOfWeek);
+      d.setDate(startOfWeek.getDate() + i);
       var ds = d.toISOString().split('T')[0];
+      var isToday = ds === now.toISOString().split('T')[0];
       var isActive = ds === selectedDate;
       var numCls = datesMap[ds] || 0;
-      html += '<div class="calendar-day' + (isActive?' active':'') + '" data-date="' + ds + '">'
+      
+      html += '<div class="calendar-day' + (isActive?' active':'') + (isToday?' is-today':'') + '" data-date="' + ds + '">'
         + '<div class="day-name">' + dias[d.getDay()] + '</div>'
         + '<div class="day-number">' + d.getDate() + '</div>'
         + '<div class="day-classes">' + (numCls > 0 ? numCls + ' clases' : '-') + '</div></div>';
@@ -182,8 +196,8 @@ Pages.dashboard = async function(container) {
     return html + '</div>';
   }
 
-  function renderClasses(cls) {
-    if (cls.length === 0) return '<div class="empty-state"><div class="empty-icon">&#128197;</div><h3>No hay clases este dia</h3><p>Selecciona otra fecha en el calendario</p></div>';
+  function buildClassesHTML(cls) {
+    if (cls.length === 0) return '<div class="empty-state"><div class="empty-icon">&#128197;</div><h3>No hay clases este dia</h3><p>Prueba seleccionando otra fecha</p></div>';
     var html = '';
     cls.forEach(function(c, i) {
       var pct = ((c.cupo_total - c.cupo_disponible) / c.cupo_total) * 100;
@@ -202,22 +216,57 @@ Pages.dashboard = async function(container) {
     return html;
   }
 
-  function bindCalendar() {
+  function bindCalendarEvents() {
     document.querySelectorAll('.calendar-day').forEach(function(el) {
-      el.onclick = function() { selectedDate = el.dataset.date; render(); };
+      el.onclick = function() { selectedDate = el.dataset.date; update(); };
     });
     var prev = document.getElementById('cal-prev');
     var next = document.getElementById('cal-next');
     var todayBtn = document.getElementById('cal-today');
-    if (prev) prev.onclick = function(){ weekOffset--; render(); };
-    if (next) next.onclick = function(){ weekOffset++; render(); };
-    if (todayBtn) todayBtn.onclick = function(){ weekOffset=0; selectedDate=today.toISOString().split('T')[0]; render(); };
+    
+    if (prev) prev.onclick = function(){ 
+      weekOffset--; 
+      var d = new Date(currentMonday);
+      d.setDate(currentMonday.getDate() + (weekOffset * 7));
+      selectedDate = d.toISOString().split('T')[0];
+      update(); 
+    };
+    if (next) next.onclick = function(){ 
+      weekOffset++; 
+      var d = new Date(currentMonday);
+      d.setDate(currentMonday.getDate() + (weekOffset * 7));
+      selectedDate = d.toISOString().split('T')[0];
+      update(); 
+    };
+    if (todayBtn) todayBtn.onclick = function(){ 
+      weekOffset=0; 
+      selectedDate=now.toISOString().split('T')[0]; 
+      update(); 
+    };
+
+    // Swipe Support
+    var zone = document.getElementById('swipe-zone');
+    if (zone) {
+      var touchStart = 0;
+      zone.ontouchstart = function(e) { touchStart = e.changedTouches[0].screenX; };
+      zone.ontouchend = function(e) {
+        var touchEnd = e.changedTouches[0].screenX;
+        if (touchStart - touchEnd > 50) next.click();
+        if (touchEnd - touchStart > 50) prev.click();
+      };
+    }
+
     document.querySelectorAll('.filter-chip').forEach(function(el) {
-      el.onclick = function() { filterType = el.dataset.filter; render(); };
+      el.onclick = function() { 
+        filterType = el.dataset.filter; 
+        document.querySelectorAll('.filter-chip').forEach(function(f){f.classList.remove('active');});
+        el.classList.add('active');
+        update(); 
+      };
     });
   }
 
-  function bindClassCards() {
+  function bindClassEvents() {
     document.querySelectorAll('.class-card').forEach(function(el) {
       el.onclick = function(e) {
         if (e.target.dataset.book) {
@@ -226,12 +275,6 @@ Pages.dashboard = async function(container) {
           return;
         }
         Router.navigate('/clase/' + el.dataset.id);
-      };
-    });
-    document.querySelectorAll('[data-book]').forEach(function(btn) {
-      btn.onclick = function(e) {
-        e.stopPropagation();
-        doBooking(parseInt(btn.dataset.book), btn);
       };
     });
   }
@@ -246,12 +289,15 @@ Pages.dashboard = async function(container) {
       return; 
     }
     Toast.show('success','Reserva confirmada','Tu lugar está asegurado en la nube');
-    user = await Auth.refreshUser(); // usuario local fresco 
-    if(window.Router && Router.refreshNavbar) Router.refreshNavbar(); // navbar unificado
-    render(); // dispara query global nuevo
+    user = await Auth.refreshUser(); // balance actualizado
+    var navCredits = document.querySelector('.user-credits');
+    if (navCredits) navCredits.innerHTML = '&#11088; ' + user.creditos + ' creditos disponibles';
+    if(window.Router && Router.refreshNavbar) Router.refreshNavbar();
+    update();
   }
 
-  render();
+  // Lanzar primera actualización
+  update();
 };
 
 // --- CLASS DETAIL ---
