@@ -36,7 +36,8 @@ Pages.login = function(container) {
       + '<button class="login-tab'+(authMode==='register'?' active':'')+'" id="tab-register">Registrarse</button>'
       + '</div>'
       + '<form id="auth-form">' + (authMode === 'register' ? renderRegisterForm() : authMode === 'forgot' ? renderForgotForm() : renderLoginForm()) + '</form>'
-      + '<div style="margin-top:20px; text-align:center;">'
+      + '<div style="margin-top:20px; text-align:center; display:flex; flex-direction:column; gap:12px; align-items:center;">'
+      + '<button type="button" class="btn btn-primary" id="btn-install-app" style="display:' + (window.pwaDeferredPrompt ? 'inline-flex' : 'none') + ';">Descargar App</button>'
       + (authMode === 'login' ? '<a href="javascript:void(0)" id="link-forgot" style="font-size:0.875rem; color:var(--text-secondary); text-decoration:none;">¿Olvidaste tu contraseña?</a>' : '')
       + (authMode === 'forgot' ? '<a href="javascript:void(0)" id="link-back-login" style="font-size:0.875rem; color:var(--text-secondary); text-decoration:none;">&#10229; Volver al inicio</a>' : '')
       + '</div>'
@@ -48,6 +49,19 @@ Pages.login = function(container) {
     if (fLink) fLink.onclick = function(){ authMode='forgot'; render(); };
     var bLink = document.getElementById('link-back-login');
     if (bLink) bLink.onclick = function(){ authMode='login'; render(); };
+    
+    var installBtn = document.getElementById('btn-install-app');
+    if (installBtn) {
+      installBtn.onclick = async function() {
+        if (window.pwaDeferredPrompt) {
+          window.pwaDeferredPrompt.prompt();
+          const { outcome } = await window.pwaDeferredPrompt.userChoice;
+          console.log('Install prompt result:', outcome);
+          window.pwaDeferredPrompt = null;
+          installBtn.style.display = 'none';
+        }
+      };
+    }
 
     document.getElementById('auth-form').onsubmit = async function(e){
       e.preventDefault();

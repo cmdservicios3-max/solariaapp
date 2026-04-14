@@ -3,6 +3,13 @@ var Auth = (function(){
   var cur = null;
   var loadingUser = null;
 
+  async function hashPassword(password) {
+    const msgBuffer = new TextEncoder().encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
   async function _fetchUser() {
     try { 
       var idStr = localStorage.getItem(SK);
@@ -45,12 +52,14 @@ var Auth = (function(){
       return null;
     }
     
+    var hashedPw = await hashPassword(pw);
+    
     // Login con Supabase (case-insensitive para email)
     var response = await supabaseClient
       .from('usuarios')
       .select('*')
       .ilike('email', email)
-      .eq('password', pw);
+      .eq('password', hashedPw);
       
     if (response.error) {
       console.error(response.error);
@@ -87,7 +96,8 @@ var Auth = (function(){
     return null;
   }
   async function register(nombre, email, pw, tel) {
-    var u = DB.register(nombre, email, pw, tel);
+    var hashedPw = await hashPassword(pw);
+    var u = DB.register(nombre, email, hashedPw, tel);
     if (!u) {
       Toast.show('error','Error','El email ya está registrado'); 
       return null;
@@ -113,7 +123,7 @@ var Auth = (function(){
       Toast.show('success','Cuenta creada','Bienvenido/a '+nombre); 
       return u;
     } else {
-      Toast.show('error', 'Error', 'No se pudo sincronizar con la nube');
+      Toast.show('error', 'Error', (result && result.error) ? result.error : 'No se pudo sincronizar con la nube');
       return null;
     }
   }
@@ -123,7 +133,8 @@ var Auth = (function(){
       Toast.show('error', 'Error', 'Los datos de verificación son incorrectos');
       return false;
     }
-    var result = await DB.updateUserInSupabase(u.id, { password: newPw });
+    var hashedPw = await hashPassword(newPw);
+    var result = await DB.updateUserInSupabase(u.id, { password: hashedPw });
     if (result) {
       Toast.show('success', 'Éxito', 'Tu contraseña ha sido actualizada');
       return true;

@@ -8,7 +8,7 @@ var DB = (function() {
   function getDefaultData() {
     return {
       usuarios: [
-        {id: 1, studio_id: 1, nombre: 'Admin Studio', email: 'admin@siguefit.com', password: 'admin123', telefono: '+5491155551234', rol: 'admin', creditos: 0, activo: 1, created_at: new Date().toISOString()}
+        {id: 1, studio_id: 1, nombre: 'Admin Studio', email: 'admin@siguefit.com', password: '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', telefono: '+5491155551234', rol: 'admin', creditos: 0, activo: 1, created_at: new Date().toISOString()}
       ],
       clases: [],
       reservas: [],
@@ -117,8 +117,13 @@ var DB = (function() {
   async function addClassToSupabase(cls) {
     try {
       if (typeof supabaseClient === 'undefined') return null;
-      cls.activa = true;
-      var response = await supabaseClient.from('clases').insert([cls]).select();
+      
+      var clsPayload = Object.assign({}, cls);
+      delete clsPayload.id;
+      delete clsPayload.created_at;
+      clsPayload.activa = true;
+
+      var response = await supabaseClient.from('clases').insert([clsPayload]).select();
       if (response.error) { console.error('Error creando en Supabase:', response.error.message); return null; }
       return response.data && response.data[0] ? response.data[0] : null;
     } catch (err) { console.error(err); return null; }
@@ -131,6 +136,11 @@ var DB = (function() {
       // Hacemos una copia para no alterar la referencia en memoria
       var userPayload = Object.assign({}, user);
       
+      // IMPORTANTE: Eliminamos el ID local para que Supabase genere el suyo propio (identity)
+      // y asigne la secuencia correcta. También eliminamos created_at para que use el default de la DB.
+      delete userPayload.id;
+      delete userPayload.created_at;
+
       // Asegurar que el campo "activo" sea boolean en caso de que en localStorage esté como 1
       userPayload.activo = (userPayload.activo === 1 || userPayload.activo === true);
 
@@ -140,10 +150,15 @@ var DB = (function() {
         console.error('Error insertando usuario en Supabase:', error.message);
         return { error: error.message };
       }
+
+      if (!data || data.length === 0) {
+        return { error: 'No se recibió confirmación de la base de datos' };
+      }
+
       return { success: true, data: data[0] };
     } catch (err) {
       console.error(err);
-      return { error: 'Excepción inesperada al sincronizar usuario' };
+      return { error: 'Excepción inesperada al sincronizar usuario: ' + err.message };
     }
   }
 

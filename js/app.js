@@ -1,6 +1,18 @@
 // ============================================
 // SOLARIA - App Initialization
 // ============================================
+
+// PWA Install Setup
+window.pwaDeferredPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  window.pwaDeferredPrompt = e;
+  
+  // Si el boton existe (ej. ya en la pantalla de login), mostrarlo si estaba oculto
+  const btn = document.getElementById('btn-install-app');
+  if (btn) btn.style.display = 'inline-flex';
+});
+
 (function() {
   // Register routes
   Router.register('/login', Pages.login, {});
