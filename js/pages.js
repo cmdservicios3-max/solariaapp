@@ -206,17 +206,28 @@ Pages.dashboard = async function(container) {
     if (cls.length === 0) return '<div class="empty-state"><div class="empty-icon">&#128197;</div><h3>No hay clases este dia</h3><p>Prueba seleccionando otra fecha</p></div>';
     var html = '';
     cls.forEach(function(c, i) {
-      var pct = ((c.cupo_total - c.cupo_disponible) / c.cupo_total) * 100;
-      var lvl = pct < 50 ? 'high' : pct < 80 ? 'medium' : 'low';
+      var ocupados = c.cupo_total - c.cupo_disponible;
+      var pct = (ocupados / c.cupo_total) * 100;
       var full = c.cupo_disponible <= 0;
-      html += '<div class="class-card" data-id="' + c.id + '" style="animation-delay:' + (i*0.05) + 's">'
+      
+      // Semáforo de cupo
+      var cupoColor, cupoLabel;
+      if (full) {
+        cupoColor = 'var(--danger)'; cupoLabel = 'Llena';
+      } else if (c.cupo_disponible <= 3) {
+        cupoColor = 'var(--warning)'; cupoLabel = 'Últimos lugares';
+      } else {
+        cupoColor = 'var(--success)'; cupoLabel = 'Disponible';
+      }
+      
+      html += '<div class="class-card" data-id="' + c.id + '" data-class=\'' + JSON.stringify(c).replace(/'/g, "&#39;") + '\' style="animation-delay:' + (i*0.05) + 's">'
         + '<div class="class-card-header"><span class="class-card-type">' + c.tipo + '</span><span class="class-card-time">&#128336; ' + c.horario + '</span></div>'
         + '<div class="class-card-body"><div class="class-card-name">' + c.nombre + '</div>'
         + '<div class="class-card-instructor">&#128100; ' + (c.instructor||'Sin asignar') + ' &middot; ' + c.duracion + ' min</div>'
         + '<div class="class-card-footer"><div class="class-card-spots">'
-        + '<div class="spots-bar"><div class="spots-bar-fill ' + lvl + '" style="width:' + pct + '%"></div></div>'
-        + '<span class="spots-text">' + c.cupo_disponible + '/' + c.cupo_total + '</span></div>'
-        + (full ? '<span class="badge badge-danger">Lleno</span>' : '<button class="btn btn-primary btn-sm" data-book="' + c.id + '">Reservar</button>')
+        + '<span style="display:inline-flex;align-items:center;gap:4px;font-size:.8rem;font-weight:600;color:' + cupoColor + '">&#128101; ' + ocupados + '/' + c.cupo_total + '</span>'
+        + '</div>'
+        + (full ? '<span class="badge badge-danger">Llena</span>' : '<button class="btn btn-primary btn-sm" data-book="' + c.id + '">Reservar</button>')
         + '</div></div></div>';
     });
     return html;
@@ -278,13 +289,107 @@ Pages.dashboard = async function(container) {
 
   function bindClassEvents() {
     document.querySelectorAll('.class-card').forEach(function(el) {
-      el.onclick = function(e) {
+      el.onclick = async function(e) {
         if (e.target.dataset.book) {
           e.stopPropagation();
           doBooking(parseInt(e.target.dataset.book), e.target);
           return;
         }
-        Router.navigate('/clase/' + el.dataset.id);
+        // Open class detail modal
+        var c = JSON.parse(el.dataset.class);
+        var ocupados = c.cupo_total - c.cupo_disponible;
+        var full = c.cupo_disponible <= 0;
+        
+        var cupoColor;
+        if (full) cupoColor = 'var(--danger)';
+        else if (c.cupo_disponible <= 3) cupoColor = 'var(--warning)';
+        else cupoColor = 'var(--success)';
+        
+        var fechaObj = new Date(c.fecha + 'T12:00:00');
+        var diasSem = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+        var meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+        var fechaFormateada = diasSem[fechaObj.getDay()] + ' ' + fechaObj.getDate() + ' de ' + meses[fechaObj.getMonth()];
+        
+        var modalContent = ''
+          + '<div style="display:flex;flex-direction:column;gap:16px">'
+          + '<div style="display:flex;align-items:center;justify-content:space-between">'
+          + '<span class="badge badge-primary" style="text-transform:uppercase">' + c.tipo + '</span>'
+          + '<span style="font-size:.875rem;color:var(--text-secondary)">&#128336; ' + c.duracion + ' min</span></div>'
+          + '<div>'
+          + '<div style="font-size:.875rem;color:var(--text-secondary);margin-bottom:4px">&#128197; ' + fechaFormateada + '</div>'
+          + '<div style="font-size:.875rem;color:var(--text-secondary)">&#128336; ' + c.horario + ' hs</div>'
+          + '</div>'
+          + '<div style="display:flex;align-items:center;gap:8px">'
+          + '<span style="font-size:.875rem;color:var(--text-secondary)">&#128100; Instructor:</span>'
+          + '<span style="font-weight:600">' + (c.instructor || 'Sin asignar') + '</span></div>'
+          + '<div style="padding:12px 16px;background:var(--bg-primary);border-radius:var(--radius-md);border:1px solid var(--border-color);display:flex;align-items:center;justify-content:space-between">'
+          + '<span style="font-size:.875rem;color:var(--text-secondary)">&#128101; Cupo</span>'
+          + '<span style="font-weight:700;font-size:1.1rem;color:' + cupoColor + '">' + ocupados + ' / ' + c.cupo_total + '</span></div>'
+          + (full 
+            ? '<div style="text-align:center;padding:8px;color:var(--danger);font-weight:600">Esta clase está llena</div>'
+            : '<button class="btn btn-primary btn-block btn-lg" id="modal-book-btn" data-book="' + c.id + '">&#10003; Reservar mi lugar</button>')
+          + '<div style="border-top:1px solid var(--border-color);padding-top:16px">'
+          + '<h4 style="font-family:var(--font-serif);font-weight:500;margin-bottom:12px">&#128203; Inscriptos</h4>'
+          + '<div id="modal-inscriptos" style="max-height:200px;overflow-y:auto">'
+          + '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:.875rem">&#8987; Cargando inscriptos...</div>'
+          + '</div></div>'
+          + '</div>';
+        
+        var overlay = UI.modal(modalContent, { title: c.nombre, maxWidth: '440px' });
+        
+        // Bind reservar button
+        var modalBook = overlay.querySelector('#modal-book-btn');
+        if (modalBook) {
+          modalBook.onclick = async function() {
+            modalBook.disabled = true; modalBook.innerHTML = 'Procesando...';
+            await doBooking(c.id);
+            overlay.remove();
+          };
+        }
+        
+        // Fetch inscriptos from Supabase
+        try {
+          var { data: reservas, error } = await supabaseClient
+            .from('reservas')
+            .select('*, usuarios(nombre)')
+            .eq('clase_id', c.id);
+          
+          var container = overlay.querySelector('#modal-inscriptos');
+          if (!container) return;
+          
+          if (error || !reservas || reservas.length === 0) {
+            container.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:.875rem">No hay inscriptos aún</div>';
+            return;
+          }
+          
+          // Sort: reservado first, then cancelado
+          reservas.sort(function(a, b) {
+            if (a.estado === 'reservado' && b.estado !== 'reservado') return -1;
+            if (a.estado !== 'reservado' && b.estado === 'reservado') return 1;
+            return 0;
+          });
+          
+          var html = '<div style="display:flex;flex-direction:column;gap:8px">';
+          reservas.forEach(function(r) {
+            var nombre = (r.usuarios && r.usuarios.nombre) ? r.usuarios.nombre : 'Usuario #' + r.usuario_id;
+            var initials = nombre.split(' ').map(function(w){ return w.charAt(0).toUpperCase(); }).join('').substring(0,2);
+            var isActive = r.estado === 'reservado';
+            var badgeClass = isActive ? 'badge-success' : 'badge-danger';
+            var badgeText = isActive ? 'Reservado' : 'Cancelado';
+            
+            html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg-primary);border-radius:var(--radius-md);border:1px solid var(--border-color)">'
+              + '<div style="display:flex;align-items:center;gap:10px">'
+              + '<div style="width:32px;height:32px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:.75rem;font-weight:600">' + initials + '</div>'
+              + '<span style="font-size:.875rem;font-weight:500">' + nombre + '</span></div>'
+              + '<span class="badge ' + badgeClass + '">' + badgeText + '</span>'
+              + '</div>';
+          });
+          html += '</div>';
+          container.innerHTML = html;
+        } catch(err) {
+          var container = overlay.querySelector('#modal-inscriptos');
+          if (container) container.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:.875rem">No se pudieron cargar los inscriptos</div>';
+        }
       };
     });
   }

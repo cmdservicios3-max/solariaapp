@@ -175,12 +175,66 @@ Pages.adminClases = function(container) {
       + '<div class="modal-footer" style="padding:16px 0 0;border:none;justify-content:space-between">'
       + (isEdit ? '<button type="button" class="btn btn-danger" id="modal-delete-btn">&#128465; Eliminar</button>' : '<div></div>')
       + '<div style="display:flex;gap:8px;"><button type="button" class="btn btn-ghost" id="modal-cancel-btn">Cancelar</button><button type="submit" class="btn btn-primary" id="modal-save-btn">' + (isEdit?'Guardar':'Crear Clase') + '</button></div></div>'
-      + '</form></div></div>';
+      + '</form>'
+      + (isEdit ? '<div style="border-top:1px solid var(--border-color);padding:var(--space-lg)">'
+      + '<h4 style="font-family:var(--font-serif);font-weight:500;margin-bottom:12px">&#128203; Inscriptos</h4>'
+      + '<div id="modal-inscriptos" style="max-height:200px;overflow-y:auto">'
+      + '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:.875rem">&#8987; Cargando inscriptos...</div>'
+      + '</div></div>' : '')
+      + '</div></div>';
     document.body.appendChild(overlay);
 
     document.getElementById('modal-close-btn').onclick = function(){ overlay.remove(); };
     document.getElementById('modal-cancel-btn').onclick = function(){ overlay.remove(); };
     overlay.onclick = function(e){ if(e.target===overlay) overlay.remove(); };
+
+    // Fetch inscriptos for existing classes
+    if (isEdit && typeof supabaseClient !== 'undefined') {
+      (async function() {
+        try {
+          var { data: reservas, error } = await supabaseClient
+            .from('reservas')
+            .select('*, usuarios(nombre)')
+            .eq('clase_id', editingClass.id);
+          
+          var container = document.getElementById('modal-inscriptos');
+          if (!container) return;
+          
+          if (error || !reservas || reservas.length === 0) {
+            container.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:.875rem">No hay inscriptos aún</div>';
+            return;
+          }
+          
+          // Sort: reservado first, then cancelado
+          reservas.sort(function(a, b) {
+            if (a.estado === 'reservado' && b.estado !== 'reservado') return -1;
+            if (a.estado !== 'reservado' && b.estado === 'reservado') return 1;
+            return 0;
+          });
+          
+          var html = '<div style="display:flex;flex-direction:column;gap:8px">';
+          reservas.forEach(function(r) {
+            var nombre = (r.usuarios && r.usuarios.nombre) ? r.usuarios.nombre : 'Usuario #' + r.usuario_id;
+            var initials = nombre.split(' ').map(function(w){ return w.charAt(0).toUpperCase(); }).join('').substring(0,2);
+            var isActive = r.estado === 'reservado';
+            var badgeClass = isActive ? 'badge-success' : 'badge-danger';
+            var badgeText = isActive ? 'Reservado' : 'Cancelado';
+            
+            html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg-primary);border-radius:var(--radius-md);border:1px solid var(--border-color)">'
+              + '<div style="display:flex;align-items:center;gap:10px">'
+              + '<div style="width:32px;height:32px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:.75rem;font-weight:600">' + initials + '</div>'
+              + '<span style="font-size:.875rem;font-weight:500">' + nombre + '</span></div>'
+              + '<span class="badge ' + badgeClass + '">' + badgeText + '</span>'
+              + '</div>';
+          });
+          html += '</div>';
+          container.innerHTML = html;
+        } catch(err) {
+          var container = document.getElementById('modal-inscriptos');
+          if (container) container.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:.875rem">No se pudieron cargar los inscriptos</div>';
+        }
+      })();
+    }
 
     var delBtn = document.getElementById('modal-delete-btn');
     if (delBtn) {

@@ -13,6 +13,32 @@ window.addEventListener('beforeinstallprompt', (e) => {
   if (btn) btn.style.display = 'inline-flex';
 });
 
+// ============================================
+// SOLARIA - Reusable UI Utilities
+// ============================================
+var UI = {};
+
+UI.modal = function(content, opts) {
+  opts = opts || {};
+  var overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = '<div class="modal" style="max-width:' + (opts.maxWidth || '500px') + '">'
+    + '<div class="modal-header"><h3 class="modal-title">' + (opts.title || '') + '</h3>'
+    + '<button class="modal-close" id="ui-modal-close">&times;</button></div>'
+    + '<div class="modal-body">' + content + '</div>'
+    + '</div>';
+  document.body.appendChild(overlay);
+
+  // Close on X button
+  overlay.querySelector('#ui-modal-close').onclick = function() { overlay.remove(); };
+  // Close on click outside
+  overlay.addEventListener('click', function(e) { 
+    if (e.target === overlay) overlay.remove(); 
+  });
+
+  return overlay;
+};
+
 (function() {
   // Register routes
   Router.register('/login', Pages.login, {});
