@@ -72,10 +72,12 @@ var Router = (function(){
       links = '<button class="nav-link'+(currentRoute==='/admin'?' active':'')+'" onclick="Router.navigate(\'/admin\')">&#128202; Panel</button>'
         + '<button class="nav-link'+(currentRoute==='/admin-clases'?' active':'')+'" onclick="Router.navigate(\'/admin-clases\')">&#128197; Clases</button>'
         + '<button class="nav-link'+(currentRoute==='/admin-clientes'?' active':'')+'" onclick="Router.navigate(\'/admin-clientes\')">&#128101; Clientes</button>'
-        + '<button class="nav-link'+(currentRoute==='/admin-pagos'?' active':'')+'" onclick="Router.navigate(\'/admin-pagos\')">&#128176; Pagos</button>';
+        + '<button class="nav-link'+(currentRoute==='/admin-pagos'?' active':'')+'" onclick="Router.navigate(\'/admin-pagos\')">&#128176; Pagos</button>'
+        + '<button class="nav-link'+(currentRoute==='/admin-creditos'?' active':'')+'" onclick="Router.navigate(\'/admin-creditos\')">&#11088; Créditos</button>';
     } else {
       links = '<button class="nav-link'+(currentRoute==='/dashboard'?' active':'')+'" onclick="Router.navigate(\'/dashboard\')">&#128197; Clases</button>'
-        + '<button class="nav-link'+(currentRoute==='/reservas'?' active':'')+'" onclick="Router.navigate(\'/reservas\')">&#128196; Mis Reservas</button>';
+        + '<button class="nav-link'+(currentRoute==='/reservas'?' active':'')+'" onclick="Router.navigate(\'/reservas\')">&#128196; Mis Reservas</button>'
+        + '<button class="nav-link'+(currentRoute==='/planes'?' active':'')+'" onclick="Router.navigate(\'/planes\')">&#128176; Planes</button>';
     }
     var initials = u ? getInitials(u.nombre) : '?';
     var creditsHtml = !isAdmin ? '<div class="user-credits">&#11088; ' + u.creditos + ' creditos</div>' : '';

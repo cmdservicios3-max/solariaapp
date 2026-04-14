@@ -405,28 +405,145 @@ Pages.adminClientes = function(container) {
   render();
 };
 
-// --- ADMIN PAYMENTS (simplified) ---
+// --- ADMIN PAYMENTS (Supabase) ---
 Pages.adminPagos = function(container) {
-  var pagos = DB.getPayments();
-  var totalPagado = pagos.filter(function(p){return p.estado==='pagado';}).reduce(function(s,p){return s+p.monto;},0);
-  var pendientes = pagos.filter(function(p){return p.estado==='pendiente';});
+  async function render() {
+    container.innerHTML = '<div class="page-container">'
+      + '<div class="page-header"><div><h1>&#128176; Gestión de Pagos</h1><p>Cargando desde Supabase...</p></div></div>'
+      + '<div style="text-align:center;padding:40px;opacity:0.6"><div style="font-size:2rem;margin-bottom:12px">&#8987;</div>Sincronizando pagos...</div></div>';
 
-  container.innerHTML = '<div class="page-container">'
-    + '<div class="page-header"><div><h1>&#128176; Pagos e Ingresos</h1><p>Resumen financiero del estudio</p></div></div>'
-    + '<div class="metrics-grid">'
-    + '<div class="metric-card mc-g"><div class="metric-icon">&#128178;</div><div class="metric-value">' + formatMoney(totalPagado) + '</div><div class="metric-label">Total cobrado</div></div>'
-    + '<div class="metric-card mc-a"><div class="metric-icon">&#9203;</div><div class="metric-value">' + pendientes.length + '</div><div class="metric-label">Pagos pendientes</div></div>'
-    + '<div class="metric-card mc-p"><div class="metric-icon">&#128179;</div><div class="metric-value">' + pagos.length + '</div><div class="metric-label">Total transacciones</div></div></div>';
+    var pagos = await DB.getPendingPaymentsFromSupabase();
+    var pendientes = pagos.filter(function(p){ return p.estado === 'pendiente'; });
+    var procesados = pagos.filter(function(p){ return p.estado !== 'pendiente'; });
 
-  if (pagos.length === 0) {
-    container.innerHTML += '<div class="empty-state"><div class="empty-icon">&#128176;</div><h3>Sin transacciones</h3><p>Los pagos apareceran cuando los clientes reserven sin creditos</p></div></div>';
-    return;
+    container.innerHTML = '<div class="page-container">'
+      + '<div class="page-header"><div><h1>&#128176; Gestión de Pagos</h1><p>' + pagos.length + ' pagos registrados</p></div></div>'
+      + '<div class="metrics-grid">'
+      + '<div class="metric-card mc-a"><div class="metric-icon">&#9203;</div><div class="metric-value">' + pendientes.length + '</div><div class="metric-label">Pendientes</div></div>'
+      + '<div class="metric-card mc-g"><div class="metric-icon">&#10003;</div><div class="metric-value">' + pagos.filter(function(p){return p.estado==='aprobado';}).length + '</div><div class="metric-label">Aprobados</div></div>'
+      + '<div class="metric-card mc-p"><div class="metric-icon">&#10007;</div><div class="metric-value">' + pagos.filter(function(p){return p.estado==='rechazado';}).length + '</div><div class="metric-label">Rechazados</div></div>'
+      + '</div>';
+
+    // Pending payments
+    if (pendientes.length > 0) {
+      container.innerHTML += '<div class="section-header"><h2 class="section-title">&#9203; Pendientes de Aprobación</h2></div>'
+        + '<div class="table-container"><table class="data-table"><thead><tr><th>Cliente</th><th>Plan</th><th>Créditos</th><th>Fecha</th><th>Acciones</th></tr></thead><tbody id="pending-tbody"></tbody></table></div>';
+      
+      var tbody = document.getElementById('pending-tbody');
+      pendientes.forEach(function(p) {
+        var uNombre = p.usuarios ? p.usuarios.nombre : 'Usuario #' + p.user_id;
+        var planNombre = p.planes ? p.planes.nombre : 'Plan #' + p.plan_id;
+        var planCreditos = p.planes ? p.planes.creditos : '?';
+        var fecha = new Date(p.created_at);
+        var fechaStr = fecha.getDate() + '/' + (fecha.getMonth()+1) + '/' + fecha.getFullYear();
+        
+        tbody.innerHTML += '<tr><td><div style="display:flex;align-items:center;gap:8px"><div class="attendee-avatar" style="width:28px;height:28px;font-size:.65rem">' + getInitials(uNombre) + '</div>' + uNombre + '</div></td>'
+          + '<td>' + planNombre + '</td>'
+          + '<td><span class="badge badge-info">' + planCreditos + ' créditos</span></td>'
+          + '<td>' + fechaStr + '</td>'
+          + '<td><div style="display:flex;gap:8px">'
+          + '<button class="btn btn-success btn-sm" data-approve="' + p.id + '">&#10003; Aprobar</button>'
+          + '<button class="btn btn-danger btn-sm" data-reject="' + p.id + '">&#10007; Rechazar</button>'
+          + '</div></td></tr>';
+      });
+    } else {
+      container.innerHTML += '<div class="card" style="text-align:center;padding:32px;color:var(--text-secondary)">&#10003; No hay pagos pendientes</div>';
+    }
+
+    // Processed payments
+    if (procesados.length > 0) {
+      container.innerHTML += '<div class="section-header" style="margin-top:32px"><h2 class="section-title">&#128203; Historial</h2></div>'
+        + '<div class="table-container"><table class="data-table"><thead><tr><th>Cliente</th><th>Plan</th><th>Fecha</th><th>Estado</th></tr></thead><tbody id="history-tbody"></tbody></table></div>';
+      
+      var histTbody = document.getElementById('history-tbody');
+      procesados.forEach(function(p) {
+        var uNombre = p.usuarios ? p.usuarios.nombre : 'Usuario #' + p.user_id;
+        var planNombre = p.planes ? p.planes.nombre : 'Plan #' + p.plan_id;
+        var fecha = new Date(p.created_at);
+        var fechaStr = fecha.getDate() + '/' + (fecha.getMonth()+1) + '/' + fecha.getFullYear();
+        var badgeClass = p.estado === 'aprobado' ? 'badge-success' : 'badge-danger';
+        var badgeText = p.estado === 'aprobado' ? 'Aprobado' : 'Rechazado';
+        
+        histTbody.innerHTML += '<tr><td>' + uNombre + '</td><td>' + planNombre + '</td><td>' + fechaStr + '</td><td><span class="badge ' + badgeClass + '">' + badgeText + '</span></td></tr>';
+      });
+    }
+
+    container.innerHTML += '</div>';
+
+    // Bind approve/reject buttons
+    document.querySelectorAll('[data-approve]').forEach(function(btn) {
+      btn.onclick = async function() {
+        btn.disabled = true; btn.innerHTML = '...';
+        var result = await DB.approvePaymentInSupabase(parseInt(btn.dataset.approve));
+        if (result.error) {
+          Toast.show('error', 'Error', result.error);
+          btn.disabled = false; btn.innerHTML = '&#10003; Aprobar';
+          return;
+        }
+        Toast.show('success', 'Pago aprobado', result.creditos + ' créditos acreditados al cliente');
+        render();
+      };
+    });
+
+    document.querySelectorAll('[data-reject]').forEach(function(btn) {
+      btn.onclick = async function() {
+        btn.disabled = true; btn.innerHTML = '...';
+        var result = await DB.rejectPaymentInSupabase(parseInt(btn.dataset.reject));
+        if (result.error) {
+          Toast.show('error', 'Error', result.error);
+          btn.disabled = false; btn.innerHTML = '&#10007; Rechazar';
+          return;
+        }
+        Toast.show('info', 'Pago rechazado', 'El pago fue marcado como rechazado');
+        render();
+      };
+    });
   }
-  var html = '<div class="table-container"><table class="data-table"><thead><tr><th>ID</th><th>Cliente</th><th>Monto</th><th>Estado</th><th>Fecha</th></tr></thead><tbody>';
-  pagos.reverse().forEach(function(p) {
-    var u = DB.getUser(p.usuario_id);
-    var badge = p.estado==='pagado' ? '<span class="badge badge-success">Pagado</span>' : '<span class="badge badge-warning">Pendiente</span>';
-    html += '<tr><td>#' + p.id + '</td><td>' + (u?u.nombre:'?') + '</td><td><strong>' + formatMoney(p.monto) + '</strong></td><td>' + badge + '</td><td>' + formatDateTime(p.created_at) + '</td></tr>';
-  });
-  container.innerHTML += html + '</tbody></table></div></div>';
+  render();
+};
+
+// --- ADMIN CREDIT MOVEMENTS ---
+Pages.adminCreditos = function(container) {
+  async function render() {
+    container.innerHTML = '<div class="page-container">'
+      + '<div class="page-header"><div><h1>&#11088; Historial de Créditos</h1><p>Cargando movimientos...</p></div></div>'
+      + '<div style="text-align:center;padding:40px;opacity:0.6"><div style="font-size:2rem;margin-bottom:12px">&#8987;</div>Sincronizando...</div></div>';
+
+    var movimientos = await DB.getCreditMovementsFromSupabase();
+
+    container.innerHTML = '<div class="page-container">'
+      + '<div class="page-header"><div><h1>&#11088; Historial de Créditos</h1><p>' + movimientos.length + ' movimientos registrados</p></div></div>';
+
+    if (movimientos.length === 0) {
+      container.innerHTML += '<div class="card" style="text-align:center;padding:32px;color:var(--text-secondary)">No hay movimientos de créditos aún</div></div>';
+      return;
+    }
+
+    container.innerHTML += '<div class="table-container"><table class="data-table"><thead><tr>'
+      + '<th>Usuario</th><th>Fecha</th><th>Tipo</th><th>Cantidad</th><th>Descripción</th>'
+      + '</tr></thead><tbody id="mov-tbody"></tbody></table></div></div>';
+
+    var tbody = document.getElementById('mov-tbody');
+    movimientos.forEach(function(m) {
+      var nombre = (m.usuarios && m.usuarios.nombre) ? m.usuarios.nombre : 'Usuario #' + m.user_id;
+      var fecha = new Date(m.created_at);
+      var fechaStr = fecha.getDate() + '/' + (fecha.getMonth()+1) + '/' + fecha.getFullYear() + ' ' + String(fecha.getHours()).padStart(2,'0') + ':' + String(fecha.getMinutes()).padStart(2,'0');
+      
+      var tipoBadge = m.tipo === 'alta' ? 'badge-success' : m.tipo === 'uso' ? 'badge-danger' : 'badge-info';
+      var tipoText = m.tipo === 'alta' ? 'Alta' : m.tipo === 'uso' ? 'Uso' : 'Ajuste';
+      
+      var isPositive = m.cantidad > 0;
+      var cantColor = isPositive ? 'var(--success)' : 'var(--danger)';
+      var cantText = (isPositive ? '+' : '') + m.cantidad;
+
+      tbody.innerHTML += '<tr>'
+        + '<td><div style="display:flex;align-items:center;gap:8px"><div class="attendee-avatar" style="width:28px;height:28px;font-size:.65rem">' + getInitials(nombre) + '</div>' + nombre + '</div></td>'
+        + '<td style="font-size:.8rem;color:var(--text-secondary)">' + fechaStr + '</td>'
+        + '<td><span class="badge ' + tipoBadge + '">' + tipoText + '</span></td>'
+        + '<td><strong style="color:' + cantColor + '">' + cantText + '</strong></td>'
+        + '<td style="font-size:.85rem;color:var(--text-secondary)">' + (m.descripcion || '-') + '</td>'
+        + '</tr>';
+    });
+  }
+  render();
 };

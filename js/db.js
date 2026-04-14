@@ -468,13 +468,123 @@ var DB = (function() {
     } catch (e) { console.error(e); return []; }
   }
 
+  // Plans & Payments (Supabase)
+  async function getPlansFromSupabase() {
+    try {
+      if (typeof supabaseClient === 'undefined') return [];
+      var { data, error } = await supabaseClient.from('planes').select('*').eq('activo', true).order('precio', { ascending: true });
+      if (error) { console.error('Error al obtener planes:', error.message); return []; }
+      return data || [];
+    } catch (err) { console.error(err); return []; }
+  }
+
+  async function createPaymentInSupabase(userId, planId) {
+    try {
+      if (typeof supabaseClient === 'undefined') return { error: 'Supabase no conectado' };
+      var { data, error } = await supabaseClient.from('pagos').insert([{
+        user_id: userId,
+        plan_id: planId,
+        estado: 'pendiente'
+      }]).select();
+      if (error) { console.error('Error creando pago:', error.message); return { error: error.message }; }
+      return { success: true, pago: data[0] };
+    } catch (err) { console.error(err); return { error: 'Error inesperado' }; }
+  }
+
+  async function getPendingPaymentsFromSupabase() {
+    try {
+      if (typeof supabaseClient === 'undefined') return [];
+      var { data, error } = await supabaseClient
+        .from('pagos')
+        .select('*, usuarios:user_id(id, nombre, email, creditos), planes:plan_id(id, nombre, creditos, precio)')
+        .order('created_at', { ascending: false });
+      if (error) { console.error('Error al obtener pagos:', error.message); return []; }
+      return data || [];
+    } catch (err) { console.error(err); return []; }
+  }
+
+  async function approvePaymentInSupabase(paymentId) {
+    try {
+      if (typeof supabaseClient === 'undefined') return { error: 'Supabase no conectado' };
+
+      // 1. Get payment with plan and user info
+      var { data: pago, error: pErr } = await supabaseClient
+        .from('pagos')
+        .select('*, planes:plan_id(creditos), usuarios:user_id(id, creditos)')
+        .eq('id', paymentId)
+        .single();
+      if (pErr || !pago) return { error: 'Pago no encontrado' };
+      if (pago.estado !== 'pendiente') return { error: 'Este pago ya fue procesado' };
+
+      // 2. Update payment status
+      var { error: uErr } = await supabaseClient.from('pagos').update({ estado: 'aprobado' }).eq('id', paymentId);
+      if (uErr) return { error: 'Error al actualizar pago' };
+
+      // 3. Add credits to user
+      var creditosDelPlan = pago.planes ? pago.planes.creditos : 0;
+      var creditosActuales = pago.usuarios ? pago.usuarios.creditos : 0;
+      var userId = pago.usuarios ? pago.usuarios.id : pago.user_id;
+      
+      await supabaseClient.from('usuarios').update({ 
+        creditos: creditosActuales + creditosDelPlan 
+      }).eq('id', userId);
+
+      // 4. Log credit movement
+      await supabaseClient.from('movimientos_creditos').insert([{
+        user_id: userId,
+        tipo: 'alta',
+        cantidad: creditosDelPlan,
+        descripcion: 'Compra de plan',
+        pago_id: paymentId
+      }]);
+
+      return { success: true, creditos: creditosDelPlan };
+    } catch (err) { console.error(err); return { error: 'Error inesperado al aprobar' }; }
+  }
+
+  async function rejectPaymentInSupabase(paymentId) {
+    try {
+      if (typeof supabaseClient === 'undefined') return { error: 'Supabase no conectado' };
+      var { error } = await supabaseClient.from('pagos').update({ estado: 'rechazado' }).eq('id', paymentId);
+      if (error) return { error: 'Error al rechazar pago' };
+      return { success: true };
+    } catch (err) { console.error(err); return { error: 'Error inesperado' }; }
+  }
+
+  async function getUserPaymentsFromSupabase(userId) {
+    try {
+      if (typeof supabaseClient === 'undefined') return [];
+      var { data, error } = await supabaseClient
+        .from('pagos')
+        .select('*, planes:plan_id(nombre, creditos, precio)')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+      if (error) { console.error('Error al obtener pagos del usuario:', error.message); return []; }
+      return data || [];
+    } catch (err) { console.error(err); return []; }
+  }
+  async function getCreditMovementsFromSupabase() {
+    try {
+      if (typeof supabaseClient === 'undefined') return [];
+      var { data, error } = await supabaseClient
+        .from('movimientos_creditos')
+        .select('*, usuarios:user_id(nombre)')
+        .order('created_at', { ascending: false });
+      if (error) { console.error('Error al obtener movimientos:', error.message); return []; }
+      return data || [];
+    } catch (err) { console.error(err); return []; }
+  }
+
   return {
     load:load, save:save, reset:reset, login:login, register:register, getUser:getUser, getUserByEmail:getUserByEmail, validateUserForReset:validateUserForReset, addUserToSupabase:addUserToSupabase,
     updateUser:updateUser, updateUserInSupabase:updateUserInSupabase, getClients:getClients, getClientsFromSupabase:getClientsFromSupabase, getClasses:getClasses, getClassesFromSupabase:getClassesFromSupabase, getClassDatesFromSupabase:getClassDatesFromSupabase, getClass:getClass,
     addClass:addClass, addClassToSupabase:addClassToSupabase, updateClass:updateClass, updateClassInSupabase:updateClassInSupabase, deleteClass:deleteClass, deleteClassFromSupabase:deleteClassFromSupabase, getClassDates:getClassDates,
     getBookings:getBookings, getBookingsByClass:getBookingsByClass, getBookingsFromSupabase:getBookingsFromSupabase, createBooking:createBooking, createBookingInSupabase:createBookingInSupabase,
     cancelBooking:cancelBooking, cancelBookingInSupabase:cancelBookingInSupabase, getPayments:getPayments, simulatePayment:simulatePayment,
-    addMessage:addMessage, getMessages:getMessages, getStats:getStats, getAdminStatsFromSupabase:getAdminStatsFromSupabase, getRecentBookingsFromSupabase:getRecentBookingsFromSupabase, getData:getData
+    addMessage:addMessage, getMessages:getMessages, getStats:getStats, getAdminStatsFromSupabase:getAdminStatsFromSupabase, getRecentBookingsFromSupabase:getRecentBookingsFromSupabase, getData:getData,
+    getPlansFromSupabase:getPlansFromSupabase, createPaymentInSupabase:createPaymentInSupabase, getPendingPaymentsFromSupabase:getPendingPaymentsFromSupabase,
+    approvePaymentInSupabase:approvePaymentInSupabase, rejectPaymentInSupabase:rejectPaymentInSupabase, getUserPaymentsFromSupabase:getUserPaymentsFromSupabase,
+    getCreditMovementsFromSupabase:getCreditMovementsFromSupabase
   };
 })();
 DB.load();
