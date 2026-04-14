@@ -134,8 +134,7 @@ Pages.dashboard = async function(container) {
     + '<div class="page-header"><div><h1>&#127947; Clases Disponibles</h1><p>Reserva tu lugar en la proxima clase</p></div>'
     + '<div class="user-credits" style="font-size:.875rem;padding:8px 16px">&#11088; ' + user.creditos + ' creditos disponibles</div></div>'
     + '<div id="calendar-area"></div>'
-    + renderFilters()
-    + '<div id="classes-area"></div>'
+    + '<div id="classes-area" style="margin-top:24px"></div>'
     + '</div>';
 
   async function update() {
@@ -163,7 +162,6 @@ Pages.dashboard = async function(container) {
     }
     
     if (clsArea) {
-      if (filterType !== 'todas') cls = cls.filter(function(c){ return c.tipo === filterType; });
       cls.sort(function(a,b){ return a.horario.localeCompare(b.horario); });
       clsArea.innerHTML = buildClassesHTML(cls);
       bindClassEvents();
@@ -202,15 +200,7 @@ Pages.dashboard = async function(container) {
     return html;
   }
 
-  function renderFilters() {
-    var types = ['todas','pilates','yoga','funcional','stretching','barre'];
-    var labels = {todas:'&#127919; Todas',pilates:'&#129526; Pilates',yoga:'&#129495; Yoga',funcional:'&#128170; Funcional',stretching:'&#129336; Stretching',barre:'&#129464; Barre'};
-    var html = '<div class="filters-bar">';
-    types.forEach(function(t) {
-      html += '<button class="filter-chip' + (filterType===t?' active':'') + '" data-filter="' + t + '">' + labels[t] + '</button>';
-    });
-    return html + '</div>';
-  }
+
 
   function buildClassesHTML(cls) {
     if (cls.length === 0) return '<div class="empty-state"><div class="empty-icon">&#128197;</div><h3>No hay clases este dia</h3><p>Prueba seleccionando otra fecha</p></div>';
@@ -283,14 +273,7 @@ Pages.dashboard = async function(container) {
       }, {passive: true});
     }
 
-    document.querySelectorAll('.filter-chip').forEach(function(el) {
-      el.onclick = function() { 
-        filterType = el.dataset.filter; 
-        document.querySelectorAll('.filter-chip').forEach(function(f){f.classList.remove('active');});
-        el.classList.add('active');
-        update(); 
-      };
-    });
+
   }
 
   function bindClassEvents() {
