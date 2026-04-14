@@ -205,7 +205,7 @@ select.form-input { appearance: none; background-image: url("data:image/svg+xml,
 .calendar-nav button { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-secondary); border-radius: var(--radius-full); cursor: pointer; transition: all .2s ease; box-shadow: var(--shadow-sm); }
 .calendar-nav button:hover { background: var(--bg-primary); color: var(--primary-dark); border-color: var(--primary); }
 .calendar-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--space-sm); padding-bottom: var(--space-md); }
-.calendar-day { min-width: 0; padding: var(--space-md) var(--space-xs); text-align: center; border-radius: var(--radius-lg); border: 1px solid var(--border-color); background: var(--bg-card); cursor: pointer; transition: all .2s ease; box-shadow: var(--shadow-sm); }
+.calendar-day { flex-shrink: 0; min-width: 72px; padding: var(--space-md) var(--space-sm); text-align: center; border-radius: var(--radius-lg); border: 1px solid var(--border-color); background: var(--bg-card); cursor: pointer; transition: all .2s ease; box-shadow: var(--shadow-sm); }
 .calendar-day:hover { border-color: var(--primary); transform: translateY(-2px); }
 .calendar-day.active { background: var(--primary); border-color: var(--primary); color: #fff; box-shadow: var(--shadow-md); }
 .calendar-day .day-name { font-size: .75rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 500; letter-spacing: 1px; }
@@ -262,6 +262,8 @@ select.form-input { appearance: none; background-image: url("data:image/svg+xml,
   .page-container { padding: var(--space-md); }
   .classes-grid { grid-template-columns: 1fr; }
   .metrics-grid { grid-template-columns: 1fr 1fr; }
+  .calendar-days { display: flex; overflow-x: auto; scroll-behavior: smooth; -ms-overflow-style: none; scrollbar-width: none; gap: var(--space-sm); }
+  .calendar-days::-webkit-scrollbar { display: none; }
   .login-card { padding: var(--space-xl) var(--space-lg); border-radius: var(--radius-lg); border-width: 0; box-shadow: none; background: transparent; }
   .login-container { background: var(--bg-primary); }
   .booking-card { flex-direction: column; align-items: flex-start; }
