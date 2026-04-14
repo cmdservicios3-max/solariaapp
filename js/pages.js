@@ -191,10 +191,12 @@ Pages.dashboard = async function(container) {
       var isActive = ds === selectedDate;
       var numCls = datesMap[ds] || 0;
       
+      var dayLetter = dias[d.getDay()].charAt(0);
+      
       html += '<div class="calendar-day' + (isActive?' active':'') + (isToday?' is-today':'') + '" data-date="' + ds + '">'
-        + '<div class="day-name">' + dias[d.getDay()] + '</div>'
+        + '<div class="day-name">' + dayLetter + '</div>'
         + '<div class="day-number">' + d.getDate() + '</div>'
-        + '<div class="day-classes">' + (numCls > 0 ? numCls + ' clases' : '-') + '</div></div>';
+        + '<div class="day-classes">' + (numCls > 0 ? '<span>' + numCls + '</span>' : '-') + '</div></div>';
     }
     html += '</div>';
     return html;
