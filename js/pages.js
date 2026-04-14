@@ -240,16 +240,16 @@ Pages.dashboard = async function(container) {
     
     if (prev) prev.onclick = function(){ 
       weekOffset--; 
-      var d = new Date(currentMonday);
-      d.setDate(currentMonday.getDate() + (weekOffset * 7));
-      selectedDate = d.toISOString().split('T')[0];
+      var sd = new Date(selectedDate + 'T12:00:00');
+      sd.setDate(sd.getDate() - 7);
+      selectedDate = sd.toISOString().split('T')[0];
       update(); 
     };
     if (next) next.onclick = function(){ 
       weekOffset++; 
-      var d = new Date(currentMonday);
-      d.setDate(currentMonday.getDate() + (weekOffset * 7));
-      selectedDate = d.toISOString().split('T')[0];
+      var sd = new Date(selectedDate + 'T12:00:00');
+      sd.setDate(sd.getDate() + 7);
+      selectedDate = sd.toISOString().split('T')[0];
       update(); 
     };
     if (todayBtn) todayBtn.onclick = function(){ 
@@ -261,13 +261,24 @@ Pages.dashboard = async function(container) {
     // Swipe Support
     var zone = document.getElementById('swipe-zone');
     if (zone) {
-      var touchStart = 0;
-      zone.ontouchstart = function(e) { touchStart = e.changedTouches[0].screenX; };
-      zone.ontouchend = function(e) {
-        var touchEnd = e.changedTouches[0].screenX;
-        if (touchStart - touchEnd > 50) next.click();
-        if (touchEnd - touchStart > 50) prev.click();
-      };
+      var touchStartX = 0;
+      var swiped = false;
+      zone.addEventListener('touchstart', function(e) { 
+        touchStartX = e.changedTouches[0].screenX; 
+        swiped = false; 
+      }, {passive: true});
+      zone.addEventListener('touchend', function(e) {
+        if (swiped) return;
+        var diff = e.changedTouches[0].screenX - touchStartX;
+        if (Math.abs(diff) > 50) {
+          swiped = true;
+          var sd = new Date(selectedDate + 'T12:00:00');
+          if (diff < 0) { weekOffset++; sd.setDate(sd.getDate() + 7); }
+          else { weekOffset--; sd.setDate(sd.getDate() - 7); }
+          selectedDate = sd.toISOString().split('T')[0];
+          update();
+        }
+      }, {passive: true});
     }
 
     document.querySelectorAll('.filter-chip').forEach(function(el) {
