@@ -604,3 +604,86 @@ Pages.myBookings = async function(container) {
   }
   render();
 };
+<<<<<<< HEAD
+=======
+
+// --- PLANES (CLIENT) ---
+Pages.planes = async function(container) {
+  var user = await Auth.refreshUser();
+  if (!user) { Router.navigate('/login'); return; }
+
+  container.innerHTML = '<div class="page-container">'
+    + '<div style="text-align:center;padding:40px;opacity:0.6"><div style="font-size:2rem;margin-bottom:12px">&#8987;</div>Cargando planes...</div></div>';
+
+  var [planes, misPagos] = await Promise.all([
+    DB.getPlansFromSupabase(),
+    DB.getUserPaymentsFromSupabase(user.id)
+  ]);
+
+  function render() {
+    var html = '<div class="page-container">'
+      + '<div class="page-header"><div><h1>&#128176; Comprar Créditos</h1><p>Elegí tu plan y sumá créditos para reservar</p></div>'
+      + '<div class="user-credits" style="font-size:.875rem;padding:8px 16px">&#11088; ' + user.creditos + ' créditos disponibles</div></div>';
+
+    if (planes.length === 0) {
+      html += '<div class="empty-state"><div class="empty-icon">&#128179;</div><h3>No hay planes disponibles</h3><p>Contacta al estudio para más información</p></div>';
+    } else {
+      html += '<div class="classes-grid" style="margin-bottom:32px">';
+      planes.forEach(function(p) {
+        html += '<div class="card" style="text-align:center;position:relative;overflow:hidden">'
+          + '<div style="position:absolute;top:0;left:0;right:0;height:4px;background:var(--primary)"></div>'
+          + '<div style="padding:var(--space-xl) var(--space-lg)">'
+          + '<h3 style="font-family:var(--font-serif);font-size:1.25rem;margin-bottom:8px">' + p.nombre + '</h3>'
+          + '<div style="font-size:2rem;font-weight:700;color:var(--primary-dark);font-family:var(--font-serif);margin-bottom:4px">$' + Number(p.precio).toLocaleString('es-AR') + '</div>'
+          + '<div style="font-size:.875rem;color:var(--text-secondary);margin-bottom:20px">ARS</div>'
+          + '<div style="display:inline-flex;align-items:center;gap:6px;padding:8px 20px;background:var(--success-bg);border-radius:var(--radius-full);margin-bottom:20px">'
+          + '<span style="font-size:1.1rem">&#11088;</span><span style="font-weight:600;color:var(--primary-dark)">' + p.creditos + ' créditos</span></div><br>'
+          + '<button class="btn btn-primary btn-lg" data-plan-id="' + p.id + '">Ya pagué</button>'
+          + '</div></div>';
+      });
+      html += '</div>';
+    }
+
+    // Payment history
+    if (misPagos.length > 0) {
+      html += '<div class="section-header"><h2 class="section-title">&#128203; Mis Pagos</h2></div>'
+        + '<div class="bookings-list">';
+      misPagos.forEach(function(pg) {
+        var plan = pg.planes;
+        var badgeClass = pg.estado === 'aprobado' ? 'badge-success' : pg.estado === 'pendiente' ? 'badge-warning' : 'badge-danger';
+        var badgeText = pg.estado === 'aprobado' ? 'Aprobado' : pg.estado === 'pendiente' ? 'Pendiente' : 'Rechazado';
+        var fecha = new Date(pg.created_at);
+        var fechaStr = fecha.getDate() + '/' + (fecha.getMonth()+1) + '/' + fecha.getFullYear();
+        html += '<div class="booking-card">'
+          + '<div class="booking-info"><div class="booking-details">'
+          + '<h3>' + (plan ? plan.nombre : 'Plan') + '</h3>'
+          + '<p>&#128197; ' + fechaStr + (plan ? ' &middot; ' + plan.creditos + ' créditos' : '') + '</p>'
+          + '</div></div>'
+          + '<div class="booking-actions"><span class="badge ' + badgeClass + '">' + badgeText + '</span></div>'
+          + '</div>';
+      });
+      html += '</div>';
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+
+    // Bind "Ya pagué" buttons
+    document.querySelectorAll('[data-plan-id]').forEach(function(btn) {
+      btn.onclick = async function() {
+        btn.disabled = true; btn.innerHTML = 'Enviando...';
+        var result = await DB.createPaymentInSupabase(user.id, parseInt(btn.dataset.planId));
+        if (result.error) {
+          Toast.show('error', 'Error', result.error);
+          btn.disabled = false; btn.innerHTML = 'Ya pagué';
+          return;
+        }
+        Toast.show('success', 'Pago enviado', 'Pendiente de aprobación por el estudio');
+        misPagos = await DB.getUserPaymentsFromSupabase(user.id);
+        render();
+      };
+    });
+  }
+  render();
+};
+>>>>>>> 872efee9d1642456ead9b3bf4038cbc2eae644bc

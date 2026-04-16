@@ -177,7 +177,18 @@ Pages.adminClases = function(container) {
       + '<div style="display:flex;gap:8px;"><button type="button" class="btn btn-ghost" id="modal-cancel-btn">Cancelar</button><button type="submit" class="btn btn-primary" id="modal-save-btn">' + (isEdit?'Guardar':'Crear Clase') + '</button></div></div>'
       + '</form>'
       + (isEdit ? '<div style="border-top:1px solid var(--border-color);padding:var(--space-lg)">'
+<<<<<<< HEAD
       + '<h4 style="font-family:var(--font-serif);font-weight:500;margin-bottom:12px">&#128203; Inscriptos</h4>'
+=======
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
+      + '<h4 style="font-family:var(--font-serif);font-weight:500;margin:0">&#128203; Inscriptos</h4>'
+      + '<button type="button" class="btn btn-ghost btn-xs" id="btn-show-add-client" style="color:var(--primary)">+ Agregar alumno</button></div>'
+      + '<div id="add-client-area" style="display:none;margin-bottom:16px;padding:12px;background:var(--bg-primary);border-radius:var(--radius-md);border:1px solid var(--border-color)">'
+      + '<div class="form-group" style="margin-bottom:8px"><label class="form-label" style="font-size:.75rem">Seleccionar Alumno</label>'
+      + '<select class="form-input" id="select-add-client" style="font-size:.875rem"><option value="">Cargando alumnos...</option></select></div>'
+      + '<div style="display:flex;gap:8px;"><button type="button" class="btn btn-primary btn-sm" id="btn-confirm-add-client" style="flex:1">Inscribir</button>'
+      + '<button type="button" class="btn btn-ghost btn-sm" id="btn-cancel-add-client">Cancelar</button></div></div>'
+>>>>>>> 872efee9d1642456ead9b3bf4038cbc2eae644bc
       + '<div id="modal-inscriptos" style="max-height:200px;overflow-y:auto">'
       + '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:.875rem">&#8987; Cargando inscriptos...</div>'
       + '</div></div>' : '')
@@ -188,6 +199,7 @@ Pages.adminClases = function(container) {
     document.getElementById('modal-cancel-btn').onclick = function(){ overlay.remove(); };
     overlay.onclick = function(e){ if(e.target===overlay) overlay.remove(); };
 
+<<<<<<< HEAD
     // Fetch inscriptos for existing classes
     if (isEdit && typeof supabaseClient !== 'undefined') {
       (async function() {
@@ -273,6 +285,117 @@ Pages.adminClases = function(container) {
           if (container) container.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:.875rem">No se pudieron cargar los inscriptos</div>';
         }
       })();
+=======
+    // Reusable function to load inscriptos
+    async function loadInscriptos() {
+      if (!isEdit || typeof supabaseClient === 'undefined') return;
+      try {
+        var { data: reservas, error } = await supabaseClient
+          .from('reservas')
+          .select('*, usuarios(nombre)')
+          .eq('clase_id', editingClass.id);
+        
+        var container = document.getElementById('modal-inscriptos');
+        if (!container) return;
+        
+        if (error || !reservas || reservas.length === 0) {
+          container.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:.875rem">No hay inscriptos aún</div>';
+          return;
+        }
+        
+        // Sort: reservado first, then cancelado
+        reservas.sort(function(a, b) {
+          if (a.estado === 'reservado' && b.estado !== 'reservado') return -1;
+          if (a.estado !== 'reservado' && b.estado === 'reservado') return 1;
+          return 0;
+        });
+        
+        var html = '<div style="display:flex;flex-direction:column;gap:8px">';
+        reservas.forEach(function(r) {
+          var nombre = (r.usuarios && r.usuarios.nombre) ? r.usuarios.nombre : 'Usuario #' + r.usuario_id;
+          var initials = nombre.split(' ').map(function(w){ return w.charAt(0).toUpperCase(); }).join('').substring(0,2);
+          var isActive = r.estado === 'reservado';
+          var badgeClass = isActive ? 'badge-success' : 'badge-danger';
+          var badgeText = isActive ? 'Reservado' : 'Cancelado';
+          
+          html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg-primary);border-radius:var(--radius-md);border:1px solid var(--border-color)">'
+            + '<div style="display:flex;align-items:center;gap:10px">'
+            + '<div style="width:32px;height:32px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:.75rem;font-weight:600">' + initials + '</div>'
+            + '<span style="font-size:.875rem;font-weight:500">' + nombre + '</span></div>'
+            + '<span class="badge ' + badgeClass + '">' + badgeText + '</span>'
+            + '</div>';
+        });
+        html += '</div>';
+        container.innerHTML = html;
+      } catch(err) {
+        var container = document.getElementById('modal-inscriptos');
+        if (container) container.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:.875rem">No se pudieron cargar los inscriptos</div>';
+      }
+    }
+
+    // Manual Enrollment Logic
+    if (isEdit) {
+      loadInscriptos();
+
+      var btnShow = document.getElementById('btn-show-add-client');
+      var areaAdd = document.getElementById('add-client-area');
+      var btnCancel = document.getElementById('btn-cancel-add-client');
+      var btnConfirm = document.getElementById('btn-confirm-add-client');
+      var selectClient = document.getElementById('select-add-client');
+
+      if (btnShow) {
+        btnShow.onclick = async function() {
+          btnShow.style.display = 'none';
+          areaAdd.style.display = 'block';
+          
+          // Populate clients list
+          if (selectClient) {
+            selectClient.innerHTML = '<option value="">Seleccionar alumno...</option>';
+            var clients = await DB.getClientsFromSupabase();
+            clients.forEach(function(u) {
+              selectClient.innerHTML += '<option value="' + u.id + '">' + u.nombre + ' (' + u.creditos + ' cred.)</option>';
+            });
+          }
+        };
+      }
+
+      if (btnCancel) {
+        btnCancel.onclick = function() {
+          areaAdd.style.display = 'none';
+          btnShow.style.display = 'block';
+        };
+      }
+
+      if (btnConfirm) {
+        btnConfirm.onclick = async function() {
+          var uid = selectClient.value;
+          if (!uid) { Toast.show('warning', 'Atención', 'Seleccione un alumno'); return; }
+          
+          btnConfirm.disabled = true; btnConfirm.innerHTML = 'Procesando...';
+          
+          // REUSE CUSTOMER BOOKING LOGIC
+          var result = await DB.createBookingInSupabase(parseInt(uid), editingClass.id);
+          
+          if (result.error) {
+            Toast.show('error', 'Error', result.error);
+            btnConfirm.disabled = false; btnConfirm.innerHTML = 'Inscribir';
+          } else {
+            Toast.show('success', 'Inscripción Exitosa', 'El alumno ha sido agregado');
+            areaAdd.style.display = 'none';
+            btnShow.style.display = 'block';
+            btnConfirm.disabled = false; btnConfirm.innerHTML = 'Inscribir';
+            
+            // Refresh modal UI
+            loadInscriptos();
+            
+            // Update spots in current editing object for background refresh if needed
+            // But we call render() below after modal closes usually. 
+            // For now, refresh background if needed:
+            render(); 
+          }
+        };
+      }
+>>>>>>> 872efee9d1642456ead9b3bf4038cbc2eae644bc
     }
 
     var delBtn = document.getElementById('modal-delete-btn');
@@ -379,10 +502,15 @@ Pages.adminClientes = function(container) {
     }));
 
     container.innerHTML = '<div class="page-container">'
+<<<<<<< HEAD
       + '<div class="page-header"><div><h1>&#128101; Gestion de Clientes</h1><p>' + clients.length + ' clientes registrados en la nube</p></div>'
       + '<button class="btn btn-primary" id="new-client-btn">&#10010; Nuevo Cliente</button></div>'
       + '<div class="table-container"><table class="data-table"><thead><tr><th>Cliente</th><th>Email</th><th>Telefono</th><th>Creditos Actuales</th><th>Reservas</th><th>Acciones</th></tr></thead><tbody>';
 
+=======
+      + '<div class="page-header"><div><h1>&#128101; Gestion de Clientes</h1><p>' + clients.length + ' clientes registrados en la nube</p></div></div>'
+      + '<div class="table-container"><table class="data-table"><thead><tr><th>Cliente</th><th>Email</th><th>Telefono</th><th>Creditos Actuales</th><th>Reservas</th><th>Modificar Creditos</th></tr></thead><tbody>';
+>>>>>>> 872efee9d1642456ead9b3bf4038cbc2eae644bc
     
     var tbody = container.querySelector('tbody');
     clientsWithBookings.forEach(function(c) {
@@ -390,6 +518,7 @@ Pages.adminClientes = function(container) {
         + '<td>' + c.email + '</td><td>' + (c.telefono||'-') + '</td>'
         + '<td><span class="badge badge-' + (c.creditos>0?'success':'warning') + '" id="badge-cred-' + c.id + '">' + c.creditos + ' creditos</span></td>'
         + '<td>' + c.reservas_activas + ' activas</td>'
+<<<<<<< HEAD
         + '<td><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
         + '<input type="number" id="input-amt-' + c.id + '" value="1" min="1" style="width:60px; height:32px; padding:4px 8px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-input); color:var(--text-primary);">'
         + '<button class="btn btn-success btn-sm" data-action="add" data-uid="' + c.id + '">Sumar</button>'
@@ -398,6 +527,15 @@ Pages.adminClientes = function(container) {
         + '<button class="btn btn-ghost btn-xs" data-quick="1" data-uid="' + c.id + '">+1 rapido</button>'
         + '<button class="btn btn-ghost btn-xs" data-quick="5" data-uid="' + c.id + '">+5 rapido</button>'
         + '<button class="btn btn-primary btn-xs" data-turnos="' + c.id + '">&#128336; Turnos Fijos</button>'
+=======
+        + '<td><div style="display:flex;align-items:center;gap:8px;">'
+        + '<input type="number" id="input-amt-' + c.id + '" value="1" min="1" style="width:60px; height:32px; padding:4px 8px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-input); color:var(--text-primary);">'
+        + '<button class="btn btn-success btn-sm" data-action="add" data-uid="' + c.id + '">Sumar</button>'
+        + '<button class="btn btn-danger btn-sm" data-action="sub" data-uid="' + c.id + '">Restar</button>'
+        + '</div><div style="margin-top:8px; display:flex; gap:8px;">'
+        + '<button class="btn btn-ghost btn-xs" data-quick="1" data-uid="' + c.id + '">+1 rapido</button>'
+        + '<button class="btn btn-ghost btn-xs" data-quick="5" data-uid="' + c.id + '">+5 rapido</button>'
+>>>>>>> 872efee9d1642456ead9b3bf4038cbc2eae644bc
         + '</div></td></tr>';
     });
     container.innerHTML += '</tbody></table></div></div>';
@@ -418,6 +556,7 @@ Pages.adminClientes = function(container) {
       var btn = document.querySelector('[data-uid="' + userId + '"][data-action="' + op + '"]');
       if (btn) { btn.disabled = true; btn.innerHTML = '...'; }
 
+<<<<<<< HEAD
       var updates = { creditos: newValue };
 
       if (op === 'add') {
@@ -429,6 +568,9 @@ Pages.adminClientes = function(container) {
       }
 
       await DB.updateUserInSupabase(u.id, updates);
+=======
+      await DB.updateUserInSupabase(u.id, {creditos: newValue});
+>>>>>>> 872efee9d1642456ead9b3bf4038cbc2eae644bc
       Toast.show('success', 'Créditos actualizados', u.nombre + ' ahora tiene ' + newValue + ' créditos');
       
       // Actualizar navbar si el admin se editó a si mismo (raro pero posible)
@@ -453,6 +595,7 @@ Pages.adminClientes = function(container) {
         updateCredits(uid, amt, 'add');
       };
     });
+<<<<<<< HEAD
 
     var newClientBtn = document.getElementById('new-client-btn');
     if (newClientBtn) {
@@ -658,10 +801,13 @@ Pages.adminClientes = function(container) {
       };
     });
 
+=======
+>>>>>>> 872efee9d1642456ead9b3bf4038cbc2eae644bc
   }
   render();
 };
 
+<<<<<<< HEAD
 // --- ADMIN PAYMENTS (simplified) ---
 Pages.adminPagos = function(container) {
   var pagos = DB.getPayments();
@@ -686,4 +832,147 @@ Pages.adminPagos = function(container) {
     html += '<tr><td>#' + p.id + '</td><td>' + (u?u.nombre:'?') + '</td><td><strong>' + formatMoney(p.monto) + '</strong></td><td>' + badge + '</td><td>' + formatDateTime(p.created_at) + '</td></tr>';
   });
   container.innerHTML += html + '</tbody></table></div></div>';
+=======
+// --- ADMIN PAYMENTS (Supabase) ---
+Pages.adminPagos = function(container) {
+  async function render() {
+    container.innerHTML = '<div class="page-container">'
+      + '<div class="page-header"><div><h1>&#128176; Gestión de Pagos</h1><p>Cargando desde Supabase...</p></div></div>'
+      + '<div style="text-align:center;padding:40px;opacity:0.6"><div style="font-size:2rem;margin-bottom:12px">&#8987;</div>Sincronizando pagos...</div></div>';
+
+    var pagos = await DB.getPendingPaymentsFromSupabase();
+    var pendientes = pagos.filter(function(p){ return p.estado === 'pendiente'; });
+    var procesados = pagos.filter(function(p){ return p.estado !== 'pendiente'; });
+
+    container.innerHTML = '<div class="page-container">'
+      + '<div class="page-header"><div><h1>&#128176; Gestión de Pagos</h1><p>' + pagos.length + ' pagos registrados</p></div></div>'
+      + '<div class="metrics-grid">'
+      + '<div class="metric-card mc-a"><div class="metric-icon">&#9203;</div><div class="metric-value">' + pendientes.length + '</div><div class="metric-label">Pendientes</div></div>'
+      + '<div class="metric-card mc-g"><div class="metric-icon">&#10003;</div><div class="metric-value">' + pagos.filter(function(p){return p.estado==='aprobado';}).length + '</div><div class="metric-label">Aprobados</div></div>'
+      + '<div class="metric-card mc-p"><div class="metric-icon">&#10007;</div><div class="metric-value">' + pagos.filter(function(p){return p.estado==='rechazado';}).length + '</div><div class="metric-label">Rechazados</div></div>'
+      + '</div>';
+
+    // Pending payments
+    if (pendientes.length > 0) {
+      container.innerHTML += '<div class="section-header"><h2 class="section-title">&#9203; Pendientes de Aprobación</h2></div>'
+        + '<div class="table-container"><table class="data-table"><thead><tr><th>Cliente</th><th>Plan</th><th>Créditos</th><th>Fecha</th><th>Acciones</th></tr></thead><tbody id="pending-tbody"></tbody></table></div>';
+      
+      var tbody = document.getElementById('pending-tbody');
+      pendientes.forEach(function(p) {
+        var uNombre = p.usuarios ? p.usuarios.nombre : 'Usuario #' + p.user_id;
+        var planNombre = p.planes ? p.planes.nombre : 'Plan #' + p.plan_id;
+        var planCreditos = p.planes ? p.planes.creditos : '?';
+        var fecha = new Date(p.created_at);
+        var fechaStr = fecha.getDate() + '/' + (fecha.getMonth()+1) + '/' + fecha.getFullYear();
+        
+        tbody.innerHTML += '<tr><td><div style="display:flex;align-items:center;gap:8px"><div class="attendee-avatar" style="width:28px;height:28px;font-size:.65rem">' + getInitials(uNombre) + '</div>' + uNombre + '</div></td>'
+          + '<td>' + planNombre + '</td>'
+          + '<td><span class="badge badge-info">' + planCreditos + ' créditos</span></td>'
+          + '<td>' + fechaStr + '</td>'
+          + '<td><div style="display:flex;gap:8px">'
+          + '<button class="btn btn-success btn-sm" data-approve="' + p.id + '">&#10003; Aprobar</button>'
+          + '<button class="btn btn-danger btn-sm" data-reject="' + p.id + '">&#10007; Rechazar</button>'
+          + '</div></td></tr>';
+      });
+    } else {
+      container.innerHTML += '<div class="card" style="text-align:center;padding:32px;color:var(--text-secondary)">&#10003; No hay pagos pendientes</div>';
+    }
+
+    // Processed payments
+    if (procesados.length > 0) {
+      container.innerHTML += '<div class="section-header" style="margin-top:32px"><h2 class="section-title">&#128203; Historial</h2></div>'
+        + '<div class="table-container"><table class="data-table"><thead><tr><th>Cliente</th><th>Plan</th><th>Fecha</th><th>Estado</th></tr></thead><tbody id="history-tbody"></tbody></table></div>';
+      
+      var histTbody = document.getElementById('history-tbody');
+      procesados.forEach(function(p) {
+        var uNombre = p.usuarios ? p.usuarios.nombre : 'Usuario #' + p.user_id;
+        var planNombre = p.planes ? p.planes.nombre : 'Plan #' + p.plan_id;
+        var fecha = new Date(p.created_at);
+        var fechaStr = fecha.getDate() + '/' + (fecha.getMonth()+1) + '/' + fecha.getFullYear();
+        var badgeClass = p.estado === 'aprobado' ? 'badge-success' : 'badge-danger';
+        var badgeText = p.estado === 'aprobado' ? 'Aprobado' : 'Rechazado';
+        
+        histTbody.innerHTML += '<tr><td>' + uNombre + '</td><td>' + planNombre + '</td><td>' + fechaStr + '</td><td><span class="badge ' + badgeClass + '">' + badgeText + '</span></td></tr>';
+      });
+    }
+
+    container.innerHTML += '</div>';
+
+    // Bind approve/reject buttons
+    document.querySelectorAll('[data-approve]').forEach(function(btn) {
+      btn.onclick = async function() {
+        btn.disabled = true; btn.innerHTML = '...';
+        var result = await DB.approvePaymentInSupabase(parseInt(btn.dataset.approve));
+        if (result.error) {
+          Toast.show('error', 'Error', result.error);
+          btn.disabled = false; btn.innerHTML = '&#10003; Aprobar';
+          return;
+        }
+        Toast.show('success', 'Pago aprobado', result.creditos + ' créditos acreditados al cliente');
+        render();
+      };
+    });
+
+    document.querySelectorAll('[data-reject]').forEach(function(btn) {
+      btn.onclick = async function() {
+        btn.disabled = true; btn.innerHTML = '...';
+        var result = await DB.rejectPaymentInSupabase(parseInt(btn.dataset.reject));
+        if (result.error) {
+          Toast.show('error', 'Error', result.error);
+          btn.disabled = false; btn.innerHTML = '&#10007; Rechazar';
+          return;
+        }
+        Toast.show('info', 'Pago rechazado', 'El pago fue marcado como rechazado');
+        render();
+      };
+    });
+  }
+  render();
+};
+
+// --- ADMIN CREDIT MOVEMENTS ---
+Pages.adminCreditos = function(container) {
+  async function render() {
+    container.innerHTML = '<div class="page-container">'
+      + '<div class="page-header"><div><h1>&#11088; Historial de Créditos</h1><p>Cargando movimientos...</p></div></div>'
+      + '<div style="text-align:center;padding:40px;opacity:0.6"><div style="font-size:2rem;margin-bottom:12px">&#8987;</div>Sincronizando...</div></div>';
+
+    var movimientos = await DB.getCreditMovementsFromSupabase();
+
+    container.innerHTML = '<div class="page-container">'
+      + '<div class="page-header"><div><h1>&#11088; Historial de Créditos</h1><p>' + movimientos.length + ' movimientos registrados</p></div></div>';
+
+    if (movimientos.length === 0) {
+      container.innerHTML += '<div class="card" style="text-align:center;padding:32px;color:var(--text-secondary)">No hay movimientos de créditos aún</div></div>';
+      return;
+    }
+
+    container.innerHTML += '<div class="table-container"><table class="data-table"><thead><tr>'
+      + '<th>Usuario</th><th>Fecha</th><th>Tipo</th><th>Cantidad</th><th>Descripción</th>'
+      + '</tr></thead><tbody id="mov-tbody"></tbody></table></div></div>';
+
+    var tbody = document.getElementById('mov-tbody');
+    movimientos.forEach(function(m) {
+      var nombre = (m.usuarios && m.usuarios.nombre) ? m.usuarios.nombre : 'Usuario #' + m.user_id;
+      var fecha = new Date(m.created_at);
+      var fechaStr = fecha.getDate() + '/' + (fecha.getMonth()+1) + '/' + fecha.getFullYear() + ' ' + String(fecha.getHours()).padStart(2,'0') + ':' + String(fecha.getMinutes()).padStart(2,'0');
+      
+      var tipoBadge = m.tipo === 'alta' ? 'badge-success' : m.tipo === 'uso' ? 'badge-danger' : 'badge-info';
+      var tipoText = m.tipo === 'alta' ? 'Alta' : m.tipo === 'uso' ? 'Uso' : 'Ajuste';
+      
+      var isPositive = m.cantidad > 0;
+      var cantColor = isPositive ? 'var(--success)' : 'var(--danger)';
+      var cantText = (isPositive ? '+' : '') + m.cantidad;
+
+      tbody.innerHTML += '<tr>'
+        + '<td><div style="display:flex;align-items:center;gap:8px"><div class="attendee-avatar" style="width:28px;height:28px;font-size:.65rem">' + getInitials(nombre) + '</div>' + nombre + '</div></td>'
+        + '<td style="font-size:.8rem;color:var(--text-secondary)">' + fechaStr + '</td>'
+        + '<td><span class="badge ' + tipoBadge + '">' + tipoText + '</span></td>'
+        + '<td><strong style="color:' + cantColor + '">' + cantText + '</strong></td>'
+        + '<td style="font-size:.85rem;color:var(--text-secondary)">' + (m.descripcion || '-') + '</td>'
+        + '</tr>';
+    });
+  }
+  render();
+>>>>>>> 872efee9d1642456ead9b3bf4038cbc2eae644bc
 };

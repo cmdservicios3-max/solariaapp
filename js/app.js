@@ -45,10 +45,18 @@ UI.modal = function(content, opts) {
   Router.register('/dashboard', Pages.dashboard, {auth:true});
   Router.register('/clase', Pages.classDetail, {auth:true});
   Router.register('/reservas', Pages.myBookings, {auth:true});
+<<<<<<< HEAD
+=======
+  Router.register('/planes', Pages.planes, {auth:true});
+>>>>>>> 872efee9d1642456ead9b3bf4038cbc2eae644bc
   Router.register('/admin', Pages.admin, {auth:true, admin:true});
   Router.register('/admin-clases', Pages.adminClases, {auth:true, admin:true});
   Router.register('/admin-clientes', Pages.adminClientes, {auth:true, admin:true});
   Router.register('/admin-pagos', Pages.adminPagos, {auth:true, admin:true});
+<<<<<<< HEAD
+=======
+  Router.register('/admin-creditos', Pages.adminCreditos, {auth:true, admin:true});
+>>>>>>> 872efee9d1642456ead9b3bf4038cbc2eae644bc
 
   // Initialize
   Toast.init();
