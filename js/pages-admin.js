@@ -195,9 +195,6 @@ Pages.adminClases = function(container) {
       + '<div style="display:flex;gap:8px;"><button type="button" class="btn btn-ghost" id="modal-cancel-btn">Cancelar</button><button type="submit" class="btn btn-primary" id="modal-save-btn">' + (isEdit?'Guardar':'Crear Clase') + '</button></div></div>'
       + '</form>'
       + (isEdit ? '<div style="border-top:1px solid var(--border-color);padding:var(--space-lg)">'
-<<<<<<< HEAD
-      + '<h4 style="font-family:var(--font-serif);font-weight:500;margin-bottom:12px">&#128203; Inscriptos</h4>'
-=======
       + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
       + '<h4 style="font-family:var(--font-serif);font-weight:500;margin:0">&#128203; Inscriptos</h4>'
       + '<button type="button" class="btn btn-ghost btn-xs" id="btn-show-add-client" style="color:var(--primary)">+ Agregar alumno</button></div>'
@@ -206,7 +203,6 @@ Pages.adminClases = function(container) {
       + '<select class="form-input" id="select-add-client" style="font-size:.875rem"><option value="">Cargando alumnos...</option></select></div>'
       + '<div style="display:flex;gap:8px;"><button type="button" class="btn btn-primary btn-sm" id="btn-confirm-add-client" style="flex:1">Inscribir</button>'
       + '<button type="button" class="btn btn-ghost btn-sm" id="btn-cancel-add-client">Cancelar</button></div></div>'
->>>>>>> 872efee9d1642456ead9b3bf4038cbc2eae644bc
       + '<div id="modal-inscriptos" style="max-height:200px;overflow-y:auto">'
       + '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:.875rem">&#8987; Cargando inscriptos...</div>'
       + '</div></div>' : '')
@@ -217,93 +213,6 @@ Pages.adminClases = function(container) {
     document.getElementById('modal-cancel-btn').onclick = function(){ overlay.remove(); };
     overlay.onclick = function(e){ if(e.target===overlay) overlay.remove(); };
 
-<<<<<<< HEAD
-    // Fetch inscriptos for existing classes
-    if (isEdit && typeof supabaseClient !== 'undefined') {
-      (async function() {
-        try {
-          var { data: reservas, error } = await supabaseClient
-            .from('reservas')
-            .select('*, usuarios(nombre)')
-            .eq('clase_id', editingClass.id);
-          
-          var container = document.getElementById('modal-inscriptos');
-          if (!container) return;
-          
-          if (error || !reservas || reservas.length === 0) {
-            container.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:.875rem">No hay inscriptos aún</div>';
-            return;
-          }
-          
-          // Sort: reservado first, then cancelado
-          reservas.sort(function(a, b) {
-            if (a.estado === 'reservado' && b.estado !== 'reservado') return -1;
-            if (a.estado !== 'reservado' && b.estado === 'reservado') return 1;
-            return 0;
-          });
-          
-          var html = '<div style="display:flex;flex-direction:column;gap:8px">';
-          reservas.forEach(function(r) {
-            var nombre = (r.usuarios && r.usuarios.nombre) ? r.usuarios.nombre : 'Usuario #' + r.usuario_id;
-            var initials = nombre.split(' ').map(function(w){ return w.charAt(0).toUpperCase(); }).join('').substring(0,2);
-            var isActive = r.estado === 'reservado';
-            var badgeClass = isActive ? 'badge-success' : 'badge-danger';
-            var badgeText = isActive ? 'Reservado' : 'Cancelado';
-            
-            html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg-primary);border-radius:var(--radius-md);border:1px solid var(--border-color)">'
-              + '<div style="display:flex;align-items:center;gap:10px">'
-              + '<div style="width:32px;height:32px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:.75rem;font-weight:600">' + initials + '</div>'
-              + '<span style="font-size:.875rem;font-weight:500">' + nombre + '</span></div>'
-              + '<div style="display:flex;align-items:center;gap:8px">'
-              + '<span class="badge ' + badgeClass + '">' + badgeText + '</span>'
-              + (isActive ? '<button class="btn btn-danger btn-xs btn-cancel-res" data-bid="' + r.id + '">Cancelar</button>' : '')
-              + (isActive ? '<button class="btn btn-ghost btn-xs btn-cancel-fut" data-uid="' + r.usuario_id + '" data-cid="' + r.clase_id + '">Cancelar futuras</button>' : '')
-              + '</div>'
-              + '</div>';
-          });
-          html += '</div>';
-          container.innerHTML = html;
-
-          document.querySelectorAll('.btn-cancel-res').forEach(function(b) {
-            b.onclick = async function() {
-              var btn = this;
-              if (!confirm('¿Cancelar esta reserva? Se evaluará la regla de 3hs para devolver el crédito de corresponder.')) return;
-              btn.disabled = true; btn.innerHTML = '...';
-              var res = await DB.cancelBookingInSupabase(parseInt(btn.dataset.bid));
-              if (res && res.success) {
-                Toast.show('success', 'Turno Cancelado', res.isLate ? 'Cancelación tardía, sin devolución' : 'Crédito devuelto');
-                // Refresh list if desired or close modal
-                document.getElementById('modal-close-btn').click();
-                render();
-              } else {
-                Toast.show('error', 'Error', res ? res.error : 'Fallo al cancelar');
-                btn.disabled = false; btn.innerHTML = 'Cancelar';
-              }
-            };
-          });
-
-          document.querySelectorAll('.btn-cancel-fut').forEach(function(b) {
-            b.onclick = async function() {
-              var btn = this;
-              if (!confirm('¿Cancelar TODAS las reservas futuras asiduas para este usuario? Esta acción liberará esos cupos.')) return;
-              btn.disabled = true; btn.innerHTML = '...';
-              var res = await DB.cancelFutureBookingsInSupabase(parseInt(btn.dataset.uid), parseInt(btn.dataset.cid));
-              if (res && res.success) {
-                Toast.show('success', 'Reservas canceladas', 'Se cancelaron ' + res.count + ' reservas');
-                document.getElementById('modal-close-btn').click();
-                render();
-              } else {
-                Toast.show('error', 'Error', res ? res.error : 'Fallo al cancelar');
-                btn.disabled = false; btn.innerHTML = 'Cancelar futuras';
-              }
-            };
-          });
-        } catch(err) {
-          var container = document.getElementById('modal-inscriptos');
-          if (container) container.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:.875rem">No se pudieron cargar los inscriptos</div>';
-        }
-      })();
-=======
     // Reusable function to load inscriptos
     async function loadInscriptos() {
       if (!isEdit || typeof supabaseClient === 'undefined') return;
@@ -340,11 +249,49 @@ Pages.adminClases = function(container) {
             + '<div style="display:flex;align-items:center;gap:10px">'
             + '<div style="width:32px;height:32px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:.75rem;font-weight:600">' + initials + '</div>'
             + '<span style="font-size:.875rem;font-weight:500">' + nombre + '</span></div>'
+            + '<div style="display:flex;align-items:center;gap:8px">'
             + '<span class="badge ' + badgeClass + '">' + badgeText + '</span>'
+            + (isActive ? '<button class="btn btn-danger btn-xs btn-cancel-res" data-bid="' + r.id + '">Cancelar</button>' : '')
+            + (isActive ? '<button class="btn btn-ghost btn-xs btn-cancel-fut" data-uid="' + r.usuario_id + '" data-cid="' + r.clase_id + '">Cancelar futuras</button>' : '')
+            + '</div>'
             + '</div>';
         });
         html += '</div>';
         container.innerHTML = html;
+
+        document.querySelectorAll('.btn-cancel-res').forEach(function(b) {
+          b.onclick = async function() {
+            var btn = this;
+            if (!confirm('¿Cancelar esta reserva? Se evaluará la regla de 3hs para devolver el crédito de corresponder.')) return;
+            btn.disabled = true; btn.innerHTML = '...';
+            var res = await DB.cancelBookingInSupabase(parseInt(btn.dataset.bid));
+            if (res && res.success) {
+              Toast.show('success', 'Turno Cancelado', res.isLate ? 'Cancelación tardía, sin devolución' : 'Crédito devuelto');
+              loadInscriptos();
+              render();
+            } else {
+              Toast.show('error', 'Error', res ? res.error : 'Fallo al cancelar');
+              btn.disabled = false; btn.innerHTML = 'Cancelar';
+            }
+          };
+        });
+
+        document.querySelectorAll('.btn-cancel-fut').forEach(function(b) {
+          b.onclick = async function() {
+            var btn = this;
+            if (!confirm('¿Cancelar TODAS las reservas futuras asiduas para este usuario? Esta acción liberará esos cupos.')) return;
+            btn.disabled = true; btn.innerHTML = '...';
+            var res = await DB.cancelFutureBookingsInSupabase(parseInt(btn.dataset.uid), parseInt(btn.dataset.cid));
+            if (res && res.success) {
+              Toast.show('success', 'Reservas canceladas', 'Se cancelaron ' + res.count + ' reservas');
+              loadInscriptos();
+              render();
+            } else {
+              Toast.show('error', 'Error', res ? res.error : 'Fallo al cancelar');
+              btn.disabled = false; btn.innerHTML = 'Cancelar futuras';
+            }
+          };
+        });
       } catch(err) {
         var container = document.getElementById('modal-inscriptos');
         if (container) container.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:.875rem">No se pudieron cargar los inscriptos</div>';
@@ -405,15 +352,10 @@ Pages.adminClases = function(container) {
             
             // Refresh modal UI
             loadInscriptos();
-            
-            // Update spots in current editing object for background refresh if needed
-            // But we call render() below after modal closes usually. 
-            // For now, refresh background if needed:
             render(); 
           }
         };
       }
->>>>>>> 872efee9d1642456ead9b3bf4038cbc2eae644bc
     }
 
     var delBtn = document.getElementById('modal-delete-btn');
@@ -520,15 +462,9 @@ Pages.adminClientes = function(container) {
     }));
 
     container.innerHTML = '<div class="page-container">'
-<<<<<<< HEAD
       + '<div class="page-header"><div><h1>&#128101; Gestion de Clientes</h1><p>' + clients.length + ' clientes registrados en la nube</p></div>'
       + '<button class="btn btn-primary" id="new-client-btn">&#10010; Nuevo Cliente</button></div>'
       + '<div class="table-container"><table class="data-table"><thead><tr><th>Cliente</th><th>Email</th><th>Telefono</th><th>Creditos Actuales</th><th>Reservas</th><th>Acciones</th></tr></thead><tbody>';
-
-=======
-      + '<div class="page-header"><div><h1>&#128101; Gestion de Clientes</h1><p>' + clients.length + ' clientes registrados en la nube</p></div></div>'
-      + '<div class="table-container"><table class="data-table"><thead><tr><th>Cliente</th><th>Email</th><th>Telefono</th><th>Creditos Actuales</th><th>Reservas</th><th>Modificar Creditos</th></tr></thead><tbody>';
->>>>>>> 872efee9d1642456ead9b3bf4038cbc2eae644bc
     
     var tbody = container.querySelector('tbody');
     clientsWithBookings.forEach(function(c) {
@@ -536,7 +472,6 @@ Pages.adminClientes = function(container) {
         + '<td>' + c.email + '</td><td>' + (c.telefono||'-') + '</td>'
         + '<td><span class="badge badge-' + (c.creditos>0?'success':'warning') + '" id="badge-cred-' + c.id + '">' + c.creditos + ' creditos</span></td>'
         + '<td>' + c.reservas_activas + ' activas</td>'
-<<<<<<< HEAD
         + '<td><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
         + '<input type="number" id="input-amt-' + c.id + '" value="1" min="1" style="width:60px; height:32px; padding:4px 8px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-input); color:var(--text-primary);">'
         + '<button class="btn btn-success btn-sm" data-action="add" data-uid="' + c.id + '">Sumar</button>'
@@ -545,15 +480,6 @@ Pages.adminClientes = function(container) {
         + '<button class="btn btn-ghost btn-xs" data-quick="1" data-uid="' + c.id + '">+1 rapido</button>'
         + '<button class="btn btn-ghost btn-xs" data-quick="5" data-uid="' + c.id + '">+5 rapido</button>'
         + '<button class="btn btn-primary btn-xs" data-turnos="' + c.id + '">&#128336; Turnos Fijos</button>'
-=======
-        + '<td><div style="display:flex;align-items:center;gap:8px;">'
-        + '<input type="number" id="input-amt-' + c.id + '" value="1" min="1" style="width:60px; height:32px; padding:4px 8px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-input); color:var(--text-primary);">'
-        + '<button class="btn btn-success btn-sm" data-action="add" data-uid="' + c.id + '">Sumar</button>'
-        + '<button class="btn btn-danger btn-sm" data-action="sub" data-uid="' + c.id + '">Restar</button>'
-        + '</div><div style="margin-top:8px; display:flex; gap:8px;">'
-        + '<button class="btn btn-ghost btn-xs" data-quick="1" data-uid="' + c.id + '">+1 rapido</button>'
-        + '<button class="btn btn-ghost btn-xs" data-quick="5" data-uid="' + c.id + '">+5 rapido</button>'
->>>>>>> 872efee9d1642456ead9b3bf4038cbc2eae644bc
         + '</div></td></tr>';
     });
     container.innerHTML += '</tbody></table></div></div>';
@@ -574,7 +500,6 @@ Pages.adminClientes = function(container) {
       var btn = document.querySelector('[data-uid="' + userId + '"][data-action="' + op + '"]');
       if (btn) { btn.disabled = true; btn.innerHTML = '...'; }
 
-<<<<<<< HEAD
       var updates = { creditos: newValue };
 
       if (op === 'add') {
@@ -586,9 +511,6 @@ Pages.adminClientes = function(container) {
       }
 
       await DB.updateUserInSupabase(u.id, updates);
-=======
-      await DB.updateUserInSupabase(u.id, {creditos: newValue});
->>>>>>> 872efee9d1642456ead9b3bf4038cbc2eae644bc
       Toast.show('success', 'Créditos actualizados', u.nombre + ' ahora tiene ' + newValue + ' créditos');
       
       // Actualizar navbar si el admin se editó a si mismo (raro pero posible)
@@ -819,38 +741,10 @@ Pages.adminClientes = function(container) {
       };
     });
 
-=======
->>>>>>> 872efee9d1642456ead9b3bf4038cbc2eae644bc
   }
   render();
 };
 
-<<<<<<< HEAD
-// --- ADMIN PAYMENTS (simplified) ---
-Pages.adminPagos = function(container) {
-  var pagos = DB.getPayments();
-  var totalPagado = pagos.filter(function(p){return p.estado==='pagado';}).reduce(function(s,p){return s+p.monto;},0);
-  var pendientes = pagos.filter(function(p){return p.estado==='pendiente';});
-
-  container.innerHTML = '<div class="page-container">'
-    + '<div class="page-header"><div><h1>&#128176; Pagos e Ingresos</h1><p>Resumen financiero del estudio</p></div></div>'
-    + '<div class="metrics-grid">'
-    + '<div class="metric-card mc-g"><div class="metric-icon">&#128178;</div><div class="metric-value">' + formatMoney(totalPagado) + '</div><div class="metric-label">Total cobrado</div></div>'
-    + '<div class="metric-card mc-a"><div class="metric-icon">&#9203;</div><div class="metric-value">' + pendientes.length + '</div><div class="metric-label">Pagos pendientes</div></div>'
-    + '<div class="metric-card mc-p"><div class="metric-icon">&#128179;</div><div class="metric-value">' + pagos.length + '</div><div class="metric-label">Total transacciones</div></div></div>';
-
-  if (pagos.length === 0) {
-    container.innerHTML += '<div class="empty-state"><div class="empty-icon">&#128176;</div><h3>Sin transacciones</h3><p>Los pagos apareceran cuando los clientes reserven sin creditos</p></div></div>';
-    return;
-  }
-  var html = '<div class="table-container"><table class="data-table"><thead><tr><th>ID</th><th>Cliente</th><th>Monto</th><th>Estado</th><th>Fecha</th></tr></thead><tbody>';
-  pagos.reverse().forEach(function(p) {
-    var u = DB.getUser(p.usuario_id);
-    var badge = p.estado==='pagado' ? '<span class="badge badge-success">Pagado</span>' : '<span class="badge badge-warning">Pendiente</span>';
-    html += '<tr><td>#' + p.id + '</td><td>' + (u?u.nombre:'?') + '</td><td><strong>' + formatMoney(p.monto) + '</strong></td><td>' + badge + '</td><td>' + formatDateTime(p.created_at) + '</td></tr>';
-  });
-  container.innerHTML += html + '</tbody></table></div></div>';
-=======
 // --- ADMIN PAYMENTS (Supabase) ---
 Pages.adminPagos = function(container) {
   async function render() {
@@ -992,5 +886,5 @@ Pages.adminCreditos = function(container) {
     });
   }
   render();
->>>>>>> 872efee9d1642456ead9b3bf4038cbc2eae644bc
+
 };

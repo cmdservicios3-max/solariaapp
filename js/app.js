@@ -45,18 +45,12 @@ UI.modal = function(content, opts) {
   Router.register('/dashboard', Pages.dashboard, {auth:true});
   Router.register('/clase', Pages.classDetail, {auth:true});
   Router.register('/reservas', Pages.myBookings, {auth:true});
-<<<<<<< HEAD
-=======
   Router.register('/planes', Pages.planes, {auth:true});
->>>>>>> 872efee9d1642456ead9b3bf4038cbc2eae644bc
   Router.register('/admin', Pages.admin, {auth:true, admin:true});
   Router.register('/admin-clases', Pages.adminClases, {auth:true, admin:true});
   Router.register('/admin-clientes', Pages.adminClientes, {auth:true, admin:true});
   Router.register('/admin-pagos', Pages.adminPagos, {auth:true, admin:true});
-<<<<<<< HEAD
-=======
   Router.register('/admin-creditos', Pages.adminCreditos, {auth:true, admin:true});
->>>>>>> 872efee9d1642456ead9b3bf4038cbc2eae644bc
 
   // Initialize
   Toast.init();
@@ -65,3 +59,21 @@ UI.modal = function(content, opts) {
   console.log('%c SOLARIA v1.0 ', 'background:linear-gradient(135deg,#f39c12,#d35400);color:white;font-size:14px;font-weight:bold;padding:8px 16px;border-radius:8px;');
   console.log('Base de datos cargada:', DB.getData().clases.length, 'clases,', DB.getData().usuarios.length, 'usuarios');
 })();
+
+
+
+const fileInput = document.getElementById("fileInput");
+
+if (fileInput) {
+    fileInput.addEventListener("change", async (event) => {
+        const file = event.target.files[0];
+
+        if (!file) return;
+
+        console.log("Archivo cargado:", file.name);
+
+        // resto de lógica...
+    });
+} else {
+    console.log("ℹ️ fileInput no existe en esta vista");
+}

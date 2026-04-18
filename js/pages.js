@@ -604,8 +604,6 @@ Pages.myBookings = async function(container) {
   }
   render();
 };
-<<<<<<< HEAD
-=======
 
 // --- PLANES (CLIENT) ---
 Pages.planes = async function(container) {
@@ -686,4 +684,3 @@ Pages.planes = async function(container) {
   }
   render();
 };
->>>>>>> 872efee9d1642456ead9b3bf4038cbc2eae644bc

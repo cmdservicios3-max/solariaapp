@@ -281,7 +281,6 @@ var DB = (function() {
       if (usrError || !userDb) return { error: 'Usuario no encontrado en el servidor' };
       if (userDb.creditos <= 0) return { error: 'No tienes créditos suficientes (los pagos se migrarán pronto)' };
 
-<<<<<<< HEAD
       // Nuevo: Validación Vencimiento
       if (userDb.fecha_vencimiento) {
         var today = new Date();
@@ -290,9 +289,6 @@ var DB = (function() {
           return { error: 'Tus créditos están vencidos. Contactá al estudio para renovar.' };
         }
       }
-
-=======
->>>>>>> 872efee9d1642456ead9b3bf4038cbc2eae644bc
       // 3. Verificar si la reserva ya existe
       var { data: existing, error: extError } = await supabaseClient.from('reservas')
         .select('*').eq('usuario_id', userId).eq('clase_id', classId).eq('estado', 'reservado');
@@ -480,7 +476,6 @@ var DB = (function() {
     } catch (e) { console.error(e); return []; }
   }
 
-<<<<<<< HEAD
   // Recurrencias
   async function getRecurrenciasFromSupabase(userId) {
     try {
@@ -613,7 +608,8 @@ var DB = (function() {
     } catch (e) {
       console.error(e); return { success: false, error: e.message, count: 0 };
     }
-=======
+  }
+
   // Plans & Payments (Supabase)
   async function getPlansFromSupabase() {
     try {
@@ -719,7 +715,6 @@ var DB = (function() {
       if (error) { console.error('Error al obtener movimientos:', error.message); return []; }
       return data || [];
     } catch (err) { console.error(err); return []; }
->>>>>>> 872efee9d1642456ead9b3bf4038cbc2eae644bc
   }
 
   return {
@@ -729,14 +724,11 @@ var DB = (function() {
     getBookings:getBookings, getBookingsByClass:getBookingsByClass, getBookingsFromSupabase:getBookingsFromSupabase, createBooking:createBooking, createBookingInSupabase:createBookingInSupabase,
     cancelBooking:cancelBooking, cancelBookingInSupabase:cancelBookingInSupabase, getPayments:getPayments, simulatePayment:simulatePayment,
     addMessage:addMessage, getMessages:getMessages, getStats:getStats, getAdminStatsFromSupabase:getAdminStatsFromSupabase, getRecentBookingsFromSupabase:getRecentBookingsFromSupabase, getData:getData,
-<<<<<<< HEAD
     getRecurrenciasFromSupabase:getRecurrenciasFromSupabase, addRecurrenciaToSupabase:addRecurrenciaToSupabase, deleteRecurrenciaFromSupabase:deleteRecurrenciaFromSupabase, generarReservasRecurrencia:generarReservasRecurrencia,
-    cancelFutureBookingsInSupabase:cancelFutureBookingsInSupabase
-=======
+    cancelFutureBookingsInSupabase:cancelFutureBookingsInSupabase,
     getPlansFromSupabase:getPlansFromSupabase, createPaymentInSupabase:createPaymentInSupabase, getPendingPaymentsFromSupabase:getPendingPaymentsFromSupabase,
     approvePaymentInSupabase:approvePaymentInSupabase, rejectPaymentInSupabase:rejectPaymentInSupabase, getUserPaymentsFromSupabase:getUserPaymentsFromSupabase,
     getCreditMovementsFromSupabase:getCreditMovementsFromSupabase
->>>>>>> 872efee9d1642456ead9b3bf4038cbc2eae644bc
   };
 })();
 DB.load();
