@@ -117,14 +117,18 @@ Pages.adminClases = function(container) {
         var endString = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + 'T' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':00';
 
         var cap = (c.cupo_total - c.cupo_disponible);
+        var COLORES_INSTRUCTORES = { sol: "#6b8f71", estefi: "#3b82f6" };
+        var instKey = (c.instructor || "").trim().toLowerCase();
+        var customColor = COLORES_INSTRUCTORES[instKey] || "#9ca3af";
+
         return {
           id: c.id,
           title: c.nombre + ' (' + cap + '/' + c.cupo_total + ')',
           start: startDT,
           end: endString,
           extendedProps: c,
-          backgroundColor: c.cupo_disponible <= 0 ? 'var(--danger)' : 'var(--primary)',
-          borderColor: 'transparent'
+          backgroundColor: c.cupo_disponible <= 0 ? '#ef4444' : customColor,
+          borderColor: customColor
         };
       }),
       eventClick: function(info) {
@@ -150,6 +154,20 @@ Pages.adminClases = function(container) {
     var defaultFecha = cls && cls.fecha ? cls.fecha : new Date().toISOString().split('T')[0];
     var defaultHorario = cls && cls.horario ? cls.horario : '09:00';
 
+    var INSTRUCTORES = ["Sol", "Estefi"];
+    var instOptions = '<option value="">Sin asignar</option>';
+    INSTRUCTORES.forEach(function(i) {
+      var sel = (editingClass && (editingClass.instructor || "").trim() === i) ? ' selected' : '';
+      instOptions += '<option value="' + i + '"' + sel + '>' + i + '</option>';
+    });
+    // Fallback: mantener clase heredada no existente en lista
+    if (editingClass && editingClass.instructor) {
+      var oldInst = editingClass.instructor.trim();
+      if (oldInst !== "" && !INSTRUCTORES.includes(oldInst)) {
+        instOptions += '<option value="' + oldInst + '" selected>' + oldInst + ' (Anterior)</option>';
+      }
+    }
+
     var overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.id = 'class-modal';
@@ -157,7 +175,7 @@ Pages.adminClases = function(container) {
       + '<div class="modal-body"><form id="class-form">'
       + '<div class="form-group"><label class="form-label">Nombre</label><input class="form-input" id="cf-nombre" value="' + (editingClass?editingClass.nombre:'Pilates Mat') + '" required placeholder="Ej: Pilates Mat"></div>'
       + '<div class="form-group"><label class="form-label">Tipo</label><select class="form-input" id="cf-tipo"><option value="pilates"' + (editingClass&&editingClass.tipo==='pilates'?' selected':'') + '>Pilates</option><option value="yoga"' + (editingClass&&editingClass.tipo==='yoga'?' selected':'') + '>Yoga</option><option value="funcional"' + (editingClass&&editingClass.tipo==='funcional'?' selected':'') + '>Funcional</option><option value="stretching"' + (editingClass&&editingClass.tipo==='stretching'?' selected':'') + '>Stretching</option><option value="barre"' + (editingClass&&editingClass.tipo==='barre'?' selected':'') + '>Barre</option></select></div>'
-      + '<div class="form-group"><label class="form-label">Instructor</label><input class="form-input" id="cf-inst" value="' + (editingClass?editingClass.instructor:'') + '" placeholder="Nombre del instructor"></div>'
+      + '<div class="form-group"><label class="form-label">Instructor</label><select class="form-input" id="cf-inst">' + instOptions + '</select></div>'
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
       + '<div class="form-group"><label class="form-label">Fecha de Inicio</label><input type="date" class="form-input" id="cf-fecha" value="' + defaultFecha + '" required></div>'
       + '<div class="form-group"><label class="form-label">Horario</label><input type="time" class="form-input" id="cf-horario" value="' + defaultHorario + '" required></div></div>'
