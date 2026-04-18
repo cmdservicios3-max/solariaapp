@@ -535,7 +535,6 @@ Pages.adminClientes = function(container) {
         updateCredits(uid, amt, 'add');
       };
     });
-<<<<<<< HEAD
 
     var newClientBtn = document.getElementById('new-client-btn');
     if (newClientBtn) {
