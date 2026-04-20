@@ -149,6 +149,7 @@ Pages.adminClases = function(container) {
 
   function openModal(cls) {
     editingClass = cls && cls.id ? cls : null;
+    var originalClass = editingClass ? Object.assign({}, editingClass) : null;
     var isEdit = !!editingClass;
     // Si viene de dateClick tendra fecha pero no id
     var defaultFecha = cls && cls.fecha ? cls.fecha : new Date().toISOString().split('T')[0];
@@ -208,6 +209,26 @@ Pages.adminClases = function(container) {
       + '</div></div>' : '')
       + '</div></div>';
     document.body.appendChild(overlay);
+
+    function showRecurrencePrompt(isDelete) {
+        return new Promise(function(resolve) {
+          var title = isDelete ? '¿Eliminar serie?' : '¿Editar serie?';
+          var msg = isDelete ? '¿Eliminar solo esta clase o todas las futuras?' : '¿Aplicar cambios a esta clase o a todas las futuras?';
+          var promptDiv = document.createElement('div');
+          promptDiv.className = 'modal-overlay';
+          promptDiv.style.zIndex = '3000';
+          promptDiv.innerHTML = '<div class="modal" style="max-width:350px;text-align:center;"><div class="modal-header"><h3 class="modal-title">'+title+'</h3></div>'
+            + '<div class="modal-body"><p style="font-size:.875rem;margin-bottom:20px;color:var(--text-secondary)">'+msg+'</p>'
+            + '<div style="display:flex;flex-direction:column;gap:8px;">'
+            + '<button class="btn btn-primary" id="rp-single">Solo esta clase</button>'
+            + '<button class="btn btn-success" id="rp-future">Esta y las siguientes</button>'
+            + '<button class="btn btn-ghost" id="rp-cancel">Cancelar</button></div></div></div>';
+          document.body.appendChild(promptDiv);
+          document.getElementById('rp-single').onclick = function(){ promptDiv.remove(); resolve('single'); };
+          document.getElementById('rp-future').onclick = function(){ promptDiv.remove(); resolve('future'); };
+          document.getElementById('rp-cancel').onclick = function(){ promptDiv.remove(); resolve(null); };
+        });
+    }
 
     document.getElementById('modal-close-btn').onclick = function(){ overlay.remove(); };
     document.getElementById('modal-cancel-btn').onclick = function(){ overlay.remove(); };
@@ -361,13 +382,22 @@ Pages.adminClases = function(container) {
     var delBtn = document.getElementById('modal-delete-btn');
     if (delBtn) {
       delBtn.onclick = async function() {
-        if (confirm('¿Eliminar esta clase permanentemente?')) {
-          delBtn.innerHTML = '...'; delBtn.disabled = true;
+        var scope = await showRecurrencePrompt(true);
+        if (!scope) return;
+        
+        delBtn.innerHTML = '...'; delBtn.disabled = true;
+        if (scope === 'future') {
+          var ids = await DB.getRelatedFutureClasses(originalClass);
+          if (ids.length > 0) {
+            await DB.deleteBatchClassesInSupabase(ids);
+            Toast.show('info','Serie eliminada', ids.length + ' clases removidas');
+          }
+        } else {
           await DB.deleteClassFromSupabase(editingClass.id);
           Toast.show('info','Clase eliminada','Removida del calendario');
-          overlay.remove();
-          render();
         }
+        overlay.remove();
+        render();
       };
     }
 
@@ -388,11 +418,26 @@ Pages.adminClases = function(container) {
       };
       
       if (isEdit) {
+        var scope = await showRecurrencePrompt(false);
+        if (!scope) { saveBtn.disabled = false; saveBtn.innerHTML = 'Guardar'; return; }
+
         var diff = data.cupo_total - editingClass.cupo_total;
         data.cupo_disponible = editingClass.cupo_disponible + diff;
         if (data.cupo_disponible < 0) data.cupo_disponible = 0;
-        await DB.updateClassInSupabase(editingClass.id, data);
-        Toast.show('success','Clase actualizada', data.nombre);
+
+        if (scope === 'future') {
+          var ids = await DB.getRelatedFutureClasses(originalClass);
+          // Al actualizar lote omitimos cupo_disponible ya que cada clase puede tener inscriptos distintos
+          var batchData = Object.assign({}, data);
+          delete batchData.cupo_disponible; 
+          delete batchData.fecha; // No queremos que todas tengan la misma fecha que la base
+
+          await DB.updateBatchClassesInSupabase(ids, batchData);
+          Toast.show('success','Serie actualizada', data.nombre);
+        } else {
+          await DB.updateClassInSupabase(editingClass.id, data);
+          Toast.show('success','Clase actualizada', data.nombre);
+        }
         overlay.remove();
         render();
       } else {

@@ -194,6 +194,47 @@ var DB = (function() {
     } catch (err) { console.error(err); return false; }
   }
 
+  async function getRelatedFutureClasses(originalClass) {
+    try {
+      if (typeof supabaseClient === 'undefined') return [];
+      var { data, error } = await supabaseClient
+        .from('clases')
+        .select('id, fecha')
+        .eq('nombre', originalClass.nombre)
+        .eq('instructor', originalClass.instructor)
+        .eq('horario', originalClass.horario)
+        .gte('fecha', originalClass.fecha);
+      
+      if (error) { console.error('Error identificando serie:', error.message); return []; }
+      
+      var parts = originalClass.fecha.split('-');
+      var originalDay = new Date(parts[0], parts[1]-1, parts[2]).getDay();
+      
+      return (data || []).filter(function(c) {
+        var p = c.fecha.split('-');
+        return new Date(p[0], p[1]-1, p[2]).getDay() === originalDay;
+      }).map(function(c) { return c.id; });
+    } catch (err) { console.error(err); return []; }
+  }
+
+  async function updateBatchClassesInSupabase(ids, updates) {
+    try {
+      if (typeof supabaseClient === 'undefined' || !ids || ids.length === 0) return null;
+      var response = await supabaseClient.from('clases').update(updates).in('id', ids).select();
+      if (response.error) { console.error('Error actualizando lote:', response.error.message); return null; }
+      return response.data;
+    } catch (err) { console.error(err); return null; }
+  }
+
+  async function deleteBatchClassesInSupabase(ids) {
+    try {
+      if (typeof supabaseClient === 'undefined' || !ids || ids.length === 0) return false;
+      var response = await supabaseClient.from('clases').delete().in('id', ids);
+      if (response.error) { console.error('Error eliminando lote:', response.error.message); return false; }
+      return true;
+    } catch (err) { console.error(err); return false; }
+  }
+
   function getClasses(fecha) {
     var d = getData();
     if (fecha) return d.clases.filter(function(c){return c.fecha===fecha && c.activa;});
@@ -720,7 +761,8 @@ var DB = (function() {
   return {
     load:load, save:save, reset:reset, login:login, register:register, getUser:getUser, getUserByEmail:getUserByEmail, validateUserForReset:validateUserForReset, addUserToSupabase:addUserToSupabase,
     updateUser:updateUser, updateUserInSupabase:updateUserInSupabase, getClients:getClients, getClientsFromSupabase:getClientsFromSupabase, getClasses:getClasses, getClassesFromSupabase:getClassesFromSupabase, getClassDatesFromSupabase:getClassDatesFromSupabase, getClass:getClass,
-    addClass:addClass, addClassToSupabase:addClassToSupabase, updateClass:updateClass, updateClassInSupabase:updateClassInSupabase, deleteClass:deleteClass, deleteClassFromSupabase:deleteClassFromSupabase, getClassDates:getClassDates,
+    addClass:addClass, addClassToSupabase:addClassToSupabase, updateClass:updateClass, updateClassInSupabase:updateClassInSupabase, deleteClass:deleteClass, deleteClassFromSupabase:deleteClassFromSupabase, 
+    getRelatedFutureClasses:getRelatedFutureClasses, updateBatchClassesInSupabase:updateBatchClassesInSupabase, deleteBatchClassesInSupabase:deleteBatchClassesInSupabase, getClassDates:getClassDates,
     getBookings:getBookings, getBookingsByClass:getBookingsByClass, getBookingsFromSupabase:getBookingsFromSupabase, createBooking:createBooking, createBookingInSupabase:createBookingInSupabase,
     cancelBooking:cancelBooking, cancelBookingInSupabase:cancelBookingInSupabase, getPayments:getPayments, simulatePayment:simulatePayment,
     addMessage:addMessage, getMessages:getMessages, getStats:getStats, getAdminStatsFromSupabase:getAdminStatsFromSupabase, getRecentBookingsFromSupabase:getRecentBookingsFromSupabase, getData:getData,
