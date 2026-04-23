@@ -238,6 +238,12 @@ Pages.adminClases = function(container) {
     async function loadInscriptos() {
       if (!isEdit || typeof supabaseClient === 'undefined') return;
       try {
+        // Sync capacity to ensure data integrity
+        var newDisp = await DB.syncClassCapacity(editingClass.id);
+        if (newDisp !== null) {
+          editingClass.cupo_disponible = newDisp;
+        }
+
         var { data: reservas, error } = await supabaseClient
           .from('reservas')
           .select('*, usuarios(nombre)')

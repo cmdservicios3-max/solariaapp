@@ -350,14 +350,13 @@ var DB = (function() {
       var finalBooking = bookingData[0];
 
       // 5. Consolidar el descuento: actualizar en supabase clases y usuarios
-      await supabaseClient.from('clases').update({ cupo_disponible: cls.cupo_disponible - 1 }).eq('id', classId);
+      await syncClassCapacity(classId);
       await supabaseClient.from('usuarios').update({ creditos: userDb.creditos - 1 }).eq('id', userId);
 
       // 6. ¡Sincronizar localStorage! Mantenemos compatibilidad con el resto de la app
       var d = getData();
       var localCls = d.clases.find(function(c){return c.id===classId;});
       var localUser = d.usuarios.find(function(u){return u.id===userId;});
-      if (localCls) localCls.cupo_disponible--;
       if (localUser) localUser.creditos--;
       
       var syncBk = {
@@ -397,7 +396,7 @@ var DB = (function() {
       var { data: cls } = await supabaseClient.from('clases').select('fecha, horario, cupo_disponible').eq('id', booking.clase_id).single();
       var isLate = false;
       if (cls) {
-        await supabaseClient.from('clases').update({ cupo_disponible: cls.cupo_disponible + 1 }).eq('id', booking.clase_id);
+        await syncClassCapacity(booking.clase_id);
         var classDate = new Date(cls.fecha + 'T' + (cls.horario || '00:00') + ':00');
         var now = new Date();
         var hoursDiff = (classDate - now) / (1000 * 60 * 60);
@@ -417,6 +416,33 @@ var DB = (function() {
     } catch (err) {
       console.error(err);
       return { error: 'Error del sistema en Supabase.' };
+    }
+  }
+
+  async function syncClassCapacity(classId) {
+    try {
+      if (typeof supabaseClient === 'undefined') return null;
+      // 1. Obtener cupo_total y contar reservas activas en paralelo (1 count + 1 select)
+      var [clsRes, countRes] = await Promise.all([
+        supabaseClient.from('clases').select('cupo_total').eq('id', classId).single(),
+        supabaseClient.from('reservas').select('*', { count: 'exact', head: true }).eq('clase_id', classId).eq('estado', 'reservado')
+      ]);
+      if (clsRes.error || !clsRes.data) return null;
+      var total = clsRes.data.cupo_total;
+      var active = countRes.count || 0;
+      var disponible = total - active;
+      if (disponible < 0) disponible = 0;
+      // 2. Actualizar cupo_disponible en Supabase
+      await supabaseClient.from('clases').update({ cupo_disponible: disponible }).eq('id', classId);
+      // 3. Sincronizar localmente para compatibilidad
+      var d = getData();
+      var localCls = d.clases.find(function(c){return c.id===classId;});
+      if (localCls) localCls.cupo_disponible = disponible;
+      save();
+      return disponible;
+    } catch (err) {
+      console.error('Error in syncClassCapacity:', err);
+      return null;
     }
   }
 
@@ -770,7 +796,7 @@ var DB = (function() {
     cancelFutureBookingsInSupabase:cancelFutureBookingsInSupabase,
     getPlansFromSupabase:getPlansFromSupabase, createPaymentInSupabase:createPaymentInSupabase, getPendingPaymentsFromSupabase:getPendingPaymentsFromSupabase,
     approvePaymentInSupabase:approvePaymentInSupabase, rejectPaymentInSupabase:rejectPaymentInSupabase, getUserPaymentsFromSupabase:getUserPaymentsFromSupabase,
-    getCreditMovementsFromSupabase:getCreditMovementsFromSupabase
+    getCreditMovementsFromSupabase:getCreditMovementsFromSupabase, syncClassCapacity:syncClassCapacity
   };
 })();
 DB.load();

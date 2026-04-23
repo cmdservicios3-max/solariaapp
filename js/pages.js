@@ -362,6 +362,18 @@ Pages.dashboard = async function(container) {
             return;
           }
           
+          // Re-calculate capacity based on actual active bookings (Safeguard)
+          var activeReservas = reservas.filter(function(r){ return r.estado === 'reservado'; });
+          var realOcupados = activeReservas.length;
+          var realFull = realOcupados >= c.cupo_total;
+
+          // Update the modal UI if it's different from the class object
+          var spotsDisplay = overlay.querySelector('span[style*="font-weight:700;font-size:1.1rem"]');
+          if (spotsDisplay) {
+             spotsDisplay.innerHTML = realOcupados + ' / ' + c.cupo_total;
+             spotsDisplay.style.color = realFull ? 'var(--danger)' : (realOcupados >= c.cupo_total - 3 ? 'var(--warning)' : 'var(--success)');
+          }
+
           // Sort: reservado first, then cancelado
           reservas.sort(function(a, b) {
             if (a.estado === 'reservado' && b.estado !== 'reservado') return -1;
@@ -421,16 +433,23 @@ Pages.classDetail = async function(container, classId) {
   if (!user) { Router.navigate('/login'); return; }
   var cls = DB.getClass(parseInt(classId));
   if (!cls) { container.innerHTML = '<div class="page-container"><div class="empty-state"><h3>Clase no encontrada</h3></div></div>'; return; }
-  var bookings = DB.getBookingsByClass(cls.id);
-  var userBooking = bookings.find(function(b){ return b.usuario_id === user.id; });
-  var pct = ((cls.cupo_total - cls.cupo_disponible) / cls.cupo_total) * 100;
+  var bookings = [];
+  try {
+    var { data: bks } = await supabaseClient.from('reservas').select('*, usuarios(nombre)').eq('clase_id', classId);
+    bookings = bks || [];
+  } catch(e) { console.error(e); }
+
+  var activeBks = bookings.filter(function(b){ return b.estado === 'reservado'; });
+  var userBooking = activeBks.find(function(b){ return b.usuario_id === user.id; });
+  var realOcupados = activeBks.length;
+  var pct = (realOcupados / cls.cupo_total) * 100;
   var lvl = pct < 50 ? 'high' : pct < 80 ? 'medium' : 'low';
 
   function render() {
-    bookings = DB.getBookingsByClass(cls.id);
-    userBooking = DB.getBookings(user.id).find(function(b){ return b.clase_id === cls.id && b.estado === 'reservado'; });
-    cls = DB.getClass(parseInt(classId));
-    pct = ((cls.cupo_total - cls.cupo_disponible) / cls.cupo_total) * 100;
+    var activeBksRender = bookings.filter(function(b){ return b.estado === 'reservado'; });
+    userBooking = activeBksRender.find(function(b){ return b.usuario_id === user.id; });
+    var realOcupadosRender = activeBksRender.length;
+    pct = (realOcupadosRender / cls.cupo_total) * 100;
     lvl = pct < 50 ? 'high' : pct < 80 ? 'medium' : 'low';
 
     container.innerHTML = '<div class="page-container">'
@@ -442,22 +461,22 @@ Pages.classDetail = async function(container, classId) {
       + '<div class="class-detail-meta">'
       + '<div class="class-meta-item"><span class="meta-icon">&#128197;</span> ' + formatDate(cls.fecha) + '</div>'
       + '<div class="class-meta-item"><span class="meta-icon">&#128336;</span> ' + cls.horario + ' (' + cls.duracion + ' min)</div>'
-      + '<div class="class-meta-item"><span class="meta-icon">&#128101;</span> ' + cls.cupo_disponible + ' de ' + cls.cupo_total + ' lugares</div>'
+      + '<div class="class-meta-item"><span class="meta-icon">&#128101;</span> ' + (cls.cupo_total - realOcupadosRender) + ' de ' + cls.cupo_total + ' lugares</div>'
       + '</div></div></div>'
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:32px" class="detail-grid">'
       + '<div class="card"><h3 style="margin-bottom:16px;font-weight:700">Disponibilidad</h3>'
       + '<div style="display:flex;align-items:center;gap:16px;margin-bottom:12px">'
-      + '<div style="width:100%;height:12px;background:var(--bg-glass-strong);border-radius:9999px;overflow:hidden"><div class="spots-bar-fill ' + lvl + '" style="height:100%;width:' + pct + '%;border-radius:9999px"></div></div>'
+      + '<div style="width:100%;height:12px;background:var(--bg-glass-strong);border-radius:9999px;overflow:hidden"><div class="spots-bar-fill ' + lvl + '" style="height:100%;width:' + (pct>100?100:pct) + '%;border-radius:9999px"></div></div>'
       + '<span style="font-weight:700;white-space:nowrap">' + Math.round(pct) + '%</span></div>'
-      + '<p style="color:var(--text-secondary);font-size:.875rem">' + (cls.cupo_total - cls.cupo_disponible) + ' personas inscriptas de ' + cls.cupo_total + ' lugares</p>'
+      + '<p style="color:var(--text-secondary);font-size:.875rem">' + realOcupadosRender + ' personas inscriptas de ' + cls.cupo_total + ' lugares</p>'
       + (userBooking
         ? '<div style="margin-top:16px;font-size:0.8rem;color:var(--text-secondary);"><span style="color:var(--text-warning)">&#9888;</span> Recuerda: puedes cancelar sin penalización hasta 3 horas antes.</div><button class="btn btn-danger btn-block" style="margin-top:8px" id="cancel-btn">Cancelar mi reserva</button>'
-        : (cls.cupo_disponible > 0
+        : (realOcupadosRender < cls.cupo_total
           ? '<button class="btn btn-primary btn-block btn-lg" style="margin-top:16px" id="book-btn">&#10003; Reservar mi lugar</button>'
           : '<button class="btn btn-ghost btn-block" disabled style="margin-top:16px">Sin cupo disponible</button>'))
       + '</div>'
-      + '<div class="card"><h3 style="margin-bottom:16px;font-weight:700">Inscriptos (' + bookings.length + ')</h3>'
-      + renderAttendees(bookings)
+      + '<div class="card"><h3 style="margin-bottom:16px;font-weight:700">Inscriptos (' + activeBksRender.length + ')</h3>'
+      + renderAttendees(activeBksRender)
       + '</div></div></div>';
 
     var bookBtn = document.getElementById('book-btn');
@@ -507,8 +526,7 @@ Pages.classDetail = async function(container, classId) {
     if (bks.length === 0) return '<div class="empty-state" style="padding:24px"><p>Aun no hay inscriptos</p></div>';
     var html = '<div class="attendees-list">';
     bks.forEach(function(b) {
-      var u = DB.getUser(b.usuario_id);
-      if (!u) return;
+      var u = b.usuarios || { nombre: 'Usuario #' + b.id };
       html += '<div class="attendee-item"><div class="attendee-info">'
         + '<div class="attendee-avatar">' + getInitials(u.nombre) + '</div>'
         + '<div><div style="font-weight:600;font-size:.875rem">' + u.nombre + '</div>'
