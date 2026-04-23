@@ -116,18 +116,21 @@ Pages.adminClases = function(container) {
         d.setMinutes(d.getMinutes() + c.duracion);
         var endString = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + 'T' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':00';
 
-        var cap = (c.cupo_total - c.cupo_disponible);
+        var currentTotal = c.cupo_total || 0;
+        var currentDisp = (typeof c.cupo_disponible === 'number') ? c.cupo_disponible : currentTotal;
+        var cap = (currentTotal - currentDisp);
+
         var COLORES_INSTRUCTORES = { sol: "#6b8f71", estefi: "#3b82f6" };
         var instKey = (c.instructor || "").trim().toLowerCase();
         var customColor = COLORES_INSTRUCTORES[instKey] || "#9ca3af";
 
         return {
           id: c.id,
-          title: c.nombre + ' (' + cap + '/' + c.cupo_total + ')',
+          title: c.nombre + ' (' + cap + '/' + currentTotal + ')',
           start: startDT,
           end: endString,
           extendedProps: c,
-          backgroundColor: c.cupo_disponible <= 0 ? '#ef4444' : customColor,
+          backgroundColor: currentDisp <= 0 ? '#ef4444' : customColor,
           borderColor: customColor
         };
       }),
@@ -427,10 +430,6 @@ Pages.adminClases = function(container) {
         var scope = await showRecurrencePrompt(false);
         if (!scope) { saveBtn.disabled = false; saveBtn.innerHTML = 'Guardar'; return; }
 
-        var diff = data.cupo_total - editingClass.cupo_total;
-        data.cupo_disponible = editingClass.cupo_disponible + diff;
-        if (data.cupo_disponible < 0) data.cupo_disponible = 0;
-
         if (scope === 'future') {
           var ids = await DB.getRelatedFutureClasses(originalClass);
           // Al actualizar lote omitimos cupo_disponible ya que cada clase puede tener inscriptos distintos
@@ -439,9 +438,19 @@ Pages.adminClases = function(container) {
           delete batchData.fecha; // No queremos que todas tengan la misma fecha que la base
 
           await DB.updateBatchClassesInSupabase(ids, batchData);
+          
+          // Sincronizar la actual
+          await DB.syncClassCapacity(editingClass.id);
+          
           Toast.show('success','Serie actualizada', data.nombre);
         } else {
+          // Eliminamos cupo_disponible del payload de UPDATE para que NO sobrescriba el sync automático
+          delete data.cupo_disponible; 
           await DB.updateClassInSupabase(editingClass.id, data);
+          
+          // Forzamos resincronización real basada en conteo de reservas
+          await DB.syncClassCapacity(editingClass.id);
+          
           Toast.show('success','Clase actualizada', data.nombre);
         }
         overlay.remove();
