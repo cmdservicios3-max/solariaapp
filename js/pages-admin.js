@@ -200,7 +200,8 @@ Pages.adminClases = function(container) {
       + '</form>'
       + (isEdit ? '<div style="border-top:1px solid var(--border-color);padding:var(--space-lg)">'
       + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
-      + '<h4 style="font-family:var(--font-serif);font-weight:500;margin:0">&#128203; Inscriptos</h4>'
+      + '<div style="display:flex;align-items:center;gap:8px;"><h4 style="font-family:var(--font-serif);font-weight:500;margin:0">&#128203; Inscriptos</h4>'
+      + '<a href="javascript:void(0)" id="btn-sync-capacity" style="font-size:0.7rem; color:var(--primary); text-decoration:none;">(Sincronizar)</a></div>'
       + '<button type="button" class="btn btn-ghost btn-xs" id="btn-show-add-client" style="color:var(--primary)">+ Agregar alumno</button></div>'
       + '<div id="add-client-area" style="display:none;margin-bottom:16px;padding:12px;background:var(--bg-primary);border-radius:var(--radius-md);border:1px solid var(--border-color)">'
       + '<div class="form-group" style="margin-bottom:8px"><label class="form-label" style="font-size:.75rem">Seleccionar Alumno</label>'
@@ -246,6 +247,9 @@ Pages.adminClases = function(container) {
         if (newDisp !== null) {
           editingClass.cupo_disponible = newDisp;
         }
+        
+        // Force calendar update in background to show corrected color immediately
+        render();
 
         var { data: reservas, error } = await supabaseClient
           .from('reservas')
@@ -328,9 +332,20 @@ Pages.adminClases = function(container) {
       }
     }
 
-    // Manual Enrollment Logic
     if (isEdit) {
       loadInscriptos();
+
+      var syncLink = document.getElementById('btn-sync-capacity');
+      if (syncLink) {
+        syncLink.onclick = function() {
+          syncLink.innerHTML = '(...)';
+          loadInscriptos();
+          setTimeout(function(){ 
+            if (document.getElementById('btn-sync-capacity')) 
+               document.getElementById('btn-sync-capacity').innerHTML = '(Sincronizar)'; 
+          }, 1000);
+        };
+      }
 
       var btnShow = document.getElementById('btn-show-add-client');
       var areaAdd = document.getElementById('add-client-area');
